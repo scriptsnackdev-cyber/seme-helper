@@ -1,0 +1,19 @@
+{
+  "name": "seme-helper-discord",
+  "version": "1.0.0",
+  "description": "Seme Helper Discord Bot",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "setup": "node scripts/setup-roles.js",
+    "setup:channels": "node scripts/setup-channels.js",
+    "post-rules": "node scripts/publish-rules.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.7",
+    "sharp": "^0.35.2"
+  }
+}
