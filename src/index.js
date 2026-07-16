@@ -100,6 +100,20 @@ client.once("ready", async () => {
       },
     ],
   });
+
+  await guild.commands.create({
+    name: "remove-image",
+    description: "ลบเซ็ตรูปภาพออกจากระบบ (เฉพาะแอดมิน)",
+    options: [
+      {
+        name: "name",
+        description: "ชื่อเซ็ตรูปภาพที่ต้องการลบ เช่น รูปเซ็ตที่1",
+        type: 3, // STRING
+        required: true,
+        autocomplete: true,
+      },
+    ],
+  });
 });
 
 // (ลบระบบดักข้อความอัตโนมัติออกแล้ว ใช้คำสั่ง /add-image แทน)
@@ -141,8 +155,8 @@ client.on("guildMemberAdd", async (member) => {
 
 client.on("interactionCreate", async (interaction) => {
 
-  // Autocomplete สำหรับ /view -> แสดงรายชื่อเซ็ตที่บันทึกไว้
-  if (interaction.isAutocomplete() && interaction.commandName === "view") {
+  // Autocomplete สำหรับ /view และ /remove-image -> แสดงรายชื่อเซ็ตที่บันทึกไว้
+  if (interaction.isAutocomplete() && (interaction.commandName === "view" || interaction.commandName === "remove-image")) {
     const focused = interaction.options.getFocused();
     const choices = Object.keys(imageSets)
       .filter((name) => name.includes(focused))
@@ -164,6 +178,15 @@ client.on("interactionCreate", async (interaction) => {
 
     const rawName = interaction.options.getString("name").trim();
     const setName = rawName.startsWith("【") && rawName.endsWith("】") ? rawName : `【${rawName}】`;
+
+    // ตรวจสอบชื่อเซ็ตซ้ำ
+    if (imageSets[setName]) {
+      await interaction.reply({
+        content: `❌ มีเซ็ตรูปภาพชื่อ ${setName} อยู่ในระบบแล้ว กรุณาใช้ชื่ออื่น หรือลบเซ็ตเดิมก่อนด้วยคำสั่ง /remove-image`,
+        ephemeral: true,
+      });
+      return;
+    }
 
     await interaction.reply({
       content: `📸 กำลังรอรับรูปสำหรับเซ็ต ${setName}\nกรุณาส่งรูปภาพ (แนบได้หลายรูปในข้อความเดียว) ในห้องนี้ ภายใน 60 วินาที`,
@@ -251,6 +274,51 @@ client.on("interactionCreate", async (interaction) => {
 
     const spoilerFiles = data.files.map((file) => new AttachmentBuilder(file).setSpoiler(true));
     await interaction.reply({ content: setName, files: spoilerFiles });
+    return;
+  }
+
+  // คำสั่ง /remove-image -> ลบเซ็ตรูปภาพออกจากระบบ (เฉพาะแอดมิน)
+  if (interaction.isChatInputCommand() && interaction.commandName === "remove-image") {
+    const adminRoleId = process.env.ROLE_ADMIN_ID;
+    const member = interaction.member;
+
+    if (!adminRoleId || !member.roles.cache.has(adminRoleId)) {
+      await interaction.reply({ content: "❌ คำสั่งนี้ใช้ได้เฉพาะแอดมินเท่านั้น", ephemeral: true });
+      return;
+    }
+
+    const rawName = interaction.options.getString("name").trim();
+    const setName = rawName.startsWith("【") && rawName.endsWith("】") ? rawName : `【${rawName}】`;
+    const data = imageSets[setName];
+
+    if (!data) {
+      await interaction.reply({
+        content: `❌ ไม่พบเซ็ตรูปชื่อ ${setName}`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const setDir = path.join(IMAGE_STORAGE_DIR, sanitizeFolderName(setName));
+    try {
+      if (fs.existsSync(setDir)) {
+        fs.rmSync(setDir, { recursive: true, force: true });
+      }
+
+      delete imageSets[setName];
+      saveImageSets();
+
+      await interaction.reply({
+        content: `✅ ลบเซ็ตรูปภาพ ${setName} และรูปทั้งหมดออกจากระบบเรียบร้อยแล้ว`,
+        ephemeral: true,
+      });
+    } catch (err) {
+      console.error("⚠️ ลบเซ็ตรูปไม่สำเร็จ:", err);
+      await interaction.reply({
+        content: `❌ ลบเซ็ตรูปไม่สำเร็จ: ${err.message}`,
+        ephemeral: true,
+      });
+    }
     return;
   }
 
