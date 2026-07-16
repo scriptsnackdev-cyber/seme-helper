@@ -7,7 +7,8 @@ import {
   ActionRowBuilder,
   EmbedBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  AttachmentBuilder
 } from "discord.js";
 import "dotenv/config";
 import fs from "fs";
@@ -248,7 +249,8 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
 
-    await interaction.reply({ content: setName, files: data.files });
+    const spoilerFiles = data.files.map((file) => new AttachmentBuilder(file).setSpoiler(true));
+    await interaction.reply({ content: setName, files: spoilerFiles });
     return;
   }
 
