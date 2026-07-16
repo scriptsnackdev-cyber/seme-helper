@@ -272,7 +272,7 @@ client.on("interactionCreate", async (interaction) => {
       return;
     }
 
-    const spoilerFiles = data.files.map((file) => new AttachmentBuilder(file).setSpoiler(true));
+    const spoilerFiles = data.files.map((file) => new AttachmentBuilder(file, { name: path.basename(file) }).setSpoiler(true));
     await interaction.reply({ content: setName, files: spoilerFiles });
     return;
   }
