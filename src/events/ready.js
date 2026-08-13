@@ -511,6 +511,26 @@ export function getSlashCommandDefinitions() {
                 .setAutocomplete(true)
             )
         ),
+      new SlashCommandBuilder()
+        .setName("helper")
+        .setDescription("คำสั่งสำหรับบอทผู้ช่วยประจำเซิร์ฟเวอร์")
+        .addSubcommand((sub) =>
+          sub
+            .setName("talk")
+            .setDescription("ส่งข้อความในนามบอทผู้ช่วย (ไม่เปิดเผยตัวตนผู้พิมพ์)")
+            .addStringOption((opt) =>
+              opt
+                .setName("message")
+                .setDescription("ข้อความที่ต้องการให้บอทผู้ช่วยส่ง")
+                .setRequired(true)
+            )
+            .addAttachmentOption((opt) =>
+              opt
+                .setName("image")
+                .setDescription("แนบไฟล์รูปภาพเพิ่มเติม (ไม่บังคับ)")
+                .setRequired(false)
+            )
+        ),
   ].map((cmd) => cmd.toJSON());
 }
 

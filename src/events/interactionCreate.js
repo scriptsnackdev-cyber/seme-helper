@@ -29,6 +29,7 @@ import { handleSetHelperCommands } from "../commands/set/setHelper.js";
 import { handleGiveRoleCommand } from "../commands/giverole.js";
 import { handleQuizCommand } from "../commands/quiz.js";
 import { handleImageCommand } from "../commands/image.js";
+import { handleHelperCommand } from "../commands/helper.js";
 import { isMemberHigherThanBot } from "../utils/permission.js";
 import { sendHelperMessage } from "../utils/helper.js";
 
@@ -542,6 +543,11 @@ export function setupInteractionCreateEvent(client) {
 
       if (commandName === "image") {
         await handleImageCommand(interaction);
+        return;
+      }
+
+      if (commandName === "helper") {
+        await handleHelperCommand(interaction);
         return;
       }
     } catch (err) {
