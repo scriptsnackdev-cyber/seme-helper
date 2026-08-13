@@ -161,6 +161,13 @@ export function getSlashCommandDefinitions() {
                     .addChannelTypes(ChannelType.GuildText)
                     .setRequired(true)
                 )
+                .addChannelOption((opt) =>
+                  opt
+                    .setName("announce")
+                    .setDescription("ห้องสำหรับส่งข้อความต้อนรับเมื่ออนุมัติสมาชิก พร้อมบอกชื่อ/คำตอบข้อ 1 (ไม่บังคับ)")
+                    .addChannelTypes(ChannelType.GuildText)
+                    .setRequired(false)
+                )
                 .addStringOption((opt) =>
                   opt
                     .setName("question1")
@@ -249,6 +256,44 @@ export function getSlashCommandDefinitions() {
               sub
                 .setName("remove-image")
                 .setDescription("ลบรูปภาพหรือวิดีโอแบนเนอร์ประจำคำสั่ง /giverole ออก")
+            )
+        )
+        .addSubcommandGroup((group) =>
+          group
+            .setName("helper")
+            .setDescription("ตั้งค่าบอทผู้ช่วยประจำเซิร์ฟเวอร์ (Custom Name & Avatar)")
+            .addSubcommand((sub) =>
+              sub
+                .setName("setup")
+                .setDescription("ตั้งค่าชื่อและรูปโปรไฟล์ผู้ช่วยประจำเซิร์ฟเวอร์")
+                .addStringOption((opt) =>
+                  opt
+                    .setName("name")
+                    .setDescription("ชื่อของบอทผู้ช่วย (เช่น มาสคอตประจำคณะละคร)")
+                    .setRequired(true)
+                )
+                .addAttachmentOption((opt) =>
+                  opt
+                    .setName("image")
+                    .setDescription("แนบไฟล์รูปภาพโปรไฟล์ Avatar ของบอทผู้ช่วย")
+                    .setRequired(false)
+                )
+                .addStringOption((opt) =>
+                  opt
+                    .setName("image_url")
+                    .setDescription("ลิงก์ URL รูปโปรไฟล์ Avatar ของบอทผู้ช่วย (หากไม่สะดวกแนบไฟล์)")
+                    .setRequired(false)
+                )
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("status")
+                .setDescription("ดูข้อมูลการตั้งค่าบอทผู้ช่วยประจำเซิร์ฟเวอร์ในปัจจุบัน")
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("reset")
+                .setDescription("รีเซ็ตบอทผู้ช่วยกลับเป็นชื่อและรูปเริ่มต้นของบอท")
             )
         ),
       new SlashCommandBuilder()

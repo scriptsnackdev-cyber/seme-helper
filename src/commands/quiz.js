@@ -14,6 +14,7 @@ import {
   getQuizHeaderBannerPath,
 } from "../utils/db.js";
 import { convertMp4ToGif, downloadAndConvertToGif } from "../utils/canvas.js";
+import { sendHelperMessage } from "../utils/helper.js";
 
 export async function handleQuizCommand(interaction) {
   const { guildId } = interaction;
@@ -169,7 +170,7 @@ export async function handleQuizCommand(interaction) {
     const row = new ActionRowBuilder().addComponents(button);
     sendOptions.components = [row];
 
-    await interaction.channel.send(sendOptions);
+    await sendHelperMessage(interaction.channel, sendOptions, guildId);
     await interaction.editReply({ content: "✅ สร้างและส่งแบบทดสอบ Interactive Quiz ลงในช่องนี้เรียบร้อยแล้วค่ะ!" });
   } else if (subcommand === "delete-result") {
     const title = interaction.options.getString("title").trim();

@@ -1,5 +1,6 @@
 import { AttachmentBuilder } from "discord.js";
 import { getWelcomeSettings, getBannerPath } from "../utils/db.js";
+import { sendHelperMessage } from "../utils/helper.js";
 
 export function setupGuildMemberAddEvent(client) {
   client.on("guildMemberAdd", async (member) => {
@@ -38,7 +39,7 @@ export function setupGuildMemberAddEvent(client) {
         sendOptions.files = [attachment];
       }
 
-      await channel.send(sendOptions);
+      await sendHelperMessage(channel, sendOptions, member.guild.id);
       console.log(`🐾 [Welcome] ส่งข้อความต้อนรับให้ ${member.user.tag} ในห้อง #${channel.name} สำเร็จ`);
     } catch (err) {
       console.error("❌ เกิดข้อผิดพลาดในระบบต้อนรับสมาชิกใหม่:", err);

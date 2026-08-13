@@ -25,10 +25,12 @@ import { handleSetWelcomeCommands } from "../commands/set/setWelcome.js";
 import { handleSetMemberCommands } from "../commands/set/setMember.js";
 import { handleSetLevelingCommands } from "../commands/set/setLeveling.js";
 import { handleSetGiveRoleCommands } from "../commands/set/setGiveRole.js";
+import { handleSetHelperCommands } from "../commands/set/setHelper.js";
 import { handleGiveRoleCommand } from "../commands/giverole.js";
 import { handleQuizCommand } from "../commands/quiz.js";
 import { handleImageCommand } from "../commands/image.js";
 import { isMemberHigherThanBot } from "../utils/permission.js";
+import { sendHelperMessage } from "../utils/helper.js";
 
 const quizSessions = new Map();
 
@@ -196,6 +198,44 @@ export function setupInteractionCreateEvent(client) {
             if (memberFormSettings.approvedRoleId) {
               const aRole = await guild.roles.fetch(memberFormSettings.approvedRoleId).catch(() => null);
               if (aRole) await targetMember.roles.add(aRole).catch(() => null);
+            }
+
+            // ส่งข้อความประกาศต้อนรับไปที่ห้อง announce (ถ้ามีการตั้งค่าไว้)
+            if (memberFormSettings.announceChannelId) {
+              const announceChannel = await guild.channels.fetch(memberFormSettings.announceChannelId).catch(() => null);
+              if (announceChannel) {
+                const originalEmbed = interaction.message.embeds[0];
+                const q1Field = originalEmbed?.fields?.[0];
+                const q1Question = memberFormSettings.question1 || q1Field?.name?.replace(/^📌\s*/, "") || "ชื่อ";
+                const q1Answer = q1Field?.value || targetMember.displayName || targetMember.user.username;
+
+                const welcomeEmbed = new EmbedBuilder()
+                  .setTitle(`🎪 ยินดีต้อนรับสมาชิกใหม่!`)
+                  .setDescription(`ขอต้อนรับ <@${targetMember.id}> เข้าสู่ ${guild.name} ค่ะ! 🎉✨\n\n📌 **${q1Question}:** **${q1Answer}**`)
+                  .setColor(0xff69b4)
+                  .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true }))
+                  .setFooter({
+                    text: `${guild.name} Verification System`,
+                    iconURL: guild.iconURL({ dynamic: true }) || undefined,
+                  })
+                  .setTimestamp();
+
+                const announcePayload = {
+                  content: `🎉 ยินดีต้อนรับสมาชิกใหม่ <@${targetMember.id}> เข้าสู่เซิร์ฟเวอร์ค่ะ! ✨ (ชื่อ/คำตอบ: **${q1Answer}**)`,
+                  embeds: [welcomeEmbed],
+                };
+
+                const bannerInfo = getMemberFormBannerPath(guildId);
+                if (bannerInfo) {
+                  const bannerAttachmentFile = new AttachmentBuilder(bannerInfo.path, { name: bannerInfo.filename });
+                  welcomeEmbed.setImage(`attachment://${bannerInfo.filename}`);
+                  announcePayload.files = [bannerAttachmentFile];
+                }
+
+                await sendHelperMessage(announceChannel, announcePayload, guildId).catch((err) => {
+                  console.error("❌ ไม่สามารถส่งข้อความประกาศต้อนรับที่ห้อง announce ได้:", err);
+                });
+              }
             }
           }
 
@@ -480,6 +520,8 @@ export function setupInteractionCreateEvent(client) {
           await handleSetLevelingCommands(interaction);
         } else if (subcommandGroup === "giverole" || subcommand === "giverole") {
           await handleSetGiveRoleCommands(interaction);
+        } else if (subcommandGroup === "helper" || subcommand === "helper") {
+          await handleSetHelperCommands(interaction);
         } else {
           if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({ content: "⚠️ ไม่พบฟังก์ชันคำสั่งที่เลือกค่ะ", ephemeral: true });

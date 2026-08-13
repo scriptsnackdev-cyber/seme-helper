@@ -7,6 +7,7 @@ import {
   getLevelingBannerPath,
 } from "../utils/db.js";
 import { generateLevelUpCard } from "../utils/canvas.js";
+import { sendHelperMessage } from "../utils/helper.js";
 
 const userCooldowns = new Map();
 
@@ -82,15 +83,15 @@ export function setupMessageCreateEvent(client) {
         const cardBuffer = await generateLevelUpCard(message.author, newLevel, customBannerPath);
         const attachment = new AttachmentBuilder(cardBuffer, { name: "levelup.png" });
 
-        await targetChannel.send({
+        await sendHelperMessage(targetChannel, {
           content: `🎉 ยินดีด้วยค่ะ <@${userId}>! เลเวลของคุณอัปเป็น **Level ${newLevel}** แล้วค่ะ! ✨`,
           files: [attachment],
-        });
+        }, guildId);
       } catch (cardErr) {
         console.error("❌ ไม่สามารถสร้างการ์ด Level Up ได้:", cardErr);
-        await targetChannel.send({
+        await sendHelperMessage(targetChannel, {
           content: `🎉 ยินดีด้วยค่ะ <@${userId}>! เลเวลของคุณอัปเป็น **Level ${newLevel}** แล้วค่ะ! ✨`,
-        });
+        }, guildId);
       }
     } else {
       saveLevelingUserData(guildId, userData);

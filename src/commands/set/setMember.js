@@ -14,6 +14,7 @@ import {
   getMemberFormBannerPath,
 } from "../../utils/db.js";
 import { convertMp4ToGif, downloadAndConvertToGif } from "../../utils/canvas.js";
+import { sendHelperMessage } from "../../utils/helper.js";
 
 export async function handleSetMemberCommands(interaction) {
   const { guildId } = interaction;
@@ -77,7 +78,7 @@ export async function handleSetMemberCommands(interaction) {
     const row = new ActionRowBuilder().addComponents(button);
     sendOptions.components = [row];
 
-    await interaction.channel.send(sendOptions);
+    await sendHelperMessage(interaction.channel, sendOptions, guildId);
     await interaction.editReply({ content: "✅ สร้างและส่งข้อความยืนยันสิทธิ์สมาชิกเรียบร้อยแล้ว!" });
   } else if (subcommand === "form-setup") {
     await interaction.deferReply({ ephemeral: true });
@@ -88,6 +89,7 @@ export async function handleSetMemberCommands(interaction) {
     const pendingRole = interaction.options.getRole("pendingrole");
     const approvedRole = interaction.options.getRole("approvedrole");
     const logChannel = interaction.options.getChannel("logchannel");
+    const announceChannel = interaction.options.getChannel("announce") || interaction.options.getChannel("annouce");
     const q1 = interaction.options.getString("question1");
     const q2 = interaction.options.getString("question2");
     const q3 = interaction.options.getString("question3");
@@ -100,6 +102,7 @@ export async function handleSetMemberCommands(interaction) {
       pendingRoleId: pendingRole.id,
       approvedRoleId: approvedRole.id,
       logChannelId: logChannel.id,
+      announceChannelId: announceChannel ? announceChannel.id : null,
       question1: q1,
       question2: q2 || null,
       question3: q3 || null,
@@ -151,7 +154,8 @@ export async function handleSetMemberCommands(interaction) {
     const row = new ActionRowBuilder().addComponents(button);
     sendOptions.components = [row];
 
-    await interaction.channel.send(sendOptions);
-    await interaction.editReply({ content: `✅ สร้างและส่งฟอร์มคัดกรองสมาชิกเรียบร้อยแล้ว! คำตอบจะถูกส่งไปที่ห้อง <#${logChannel.id}> ให้ทีมงานอนุมัติค่ะ` });
+    await sendHelperMessage(interaction.channel, sendOptions, guildId);
+    const announceText = announceChannel ? ` และจะส่งข้อความประกาศต้อนรับที่ห้อง <#${announceChannel.id}> เมื่ออนุมัติ` : "";
+    await interaction.editReply({ content: `✅ สร้างและส่งฟอร์มคัดกรองสมาชิกเรียบร้อยแล้ว! คำตอบจะถูกส่งไปที่ห้อง <#${logChannel.id}> ให้ทีมงานอนุมัติ${announceText}ค่ะ` });
   }
 }

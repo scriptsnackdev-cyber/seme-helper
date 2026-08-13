@@ -251,3 +251,17 @@ export function saveImageGalleryData(guildId, data) {
   const filePath = path.join(DATABASE_DIR, guildId, "image", "data.json");
   writeJson(filePath, data);
 }
+
+// 9. Server Helper (Custom Webhook Persona)
+export function getHelperSettings(guildId) {
+  ensureGuildDatabase(guildId);
+  const filePath = path.join(DATABASE_DIR, guildId, "helper.json");
+  return readJson(filePath, { enabled: false, name: null, avatar: null });
+}
+
+export function saveHelperSettings(guildId, settings) {
+  ensureGuildDatabase(guildId);
+  const filePath = path.join(DATABASE_DIR, guildId, "helper.json");
+  writeJson(filePath, settings);
+}
+
