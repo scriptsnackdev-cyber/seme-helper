@@ -480,6 +480,24 @@ export function setupInteractionCreateEvent(client) {
             filtered.map((choice) => ({ name: choice, value: choice }))
           ).catch(() => null);
         }
+
+        if (autoCmdName === "quiz" && autoGuildId) {
+          const focused = interaction.options.getFocused(true);
+          const focusedValue = (focused.value || "").toLowerCase();
+          const quizConfig = getQuizConfig(autoGuildId);
+
+          if (focused.name.endsWith("_result") || focused.name === "title") {
+            const results = quizConfig.results || [];
+            const filtered = results
+              .map((r) => r.title || r.id)
+              .filter((title) => Boolean(title) && title.toLowerCase().includes(focusedValue))
+              .slice(0, 25);
+
+            await interaction.respond(
+              filtered.map((choice) => ({ name: choice, value: choice }))
+            ).catch(() => null);
+          }
+        }
         return;
       }
 

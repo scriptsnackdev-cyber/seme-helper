@@ -362,8 +362,9 @@ export function getSlashCommandDefinitions() {
             .addStringOption((opt) =>
               opt
                 .setName("opt1_result")
-                .setDescription("ชื่อผลลัพธ์ที่จะสะสมคะแนนให้ถ้าเลือกข้อ 1 (ต้องตรงกับ title ของ add-result)")
+                .setDescription("ชื่อผลลัพธ์ที่จะสะสมคะแนนให้ถ้าเลือกข้อ 1 (เลือกจากผลลัพธ์ที่เพิ่มไว้)")
                 .setRequired(true)
+                .setAutocomplete(true)
             )
             .addStringOption((opt) =>
               opt
@@ -376,6 +377,7 @@ export function getSlashCommandDefinitions() {
                 .setName("opt2_result")
                 .setDescription("ชื่อผลลัพธ์ที่จะสะสมคะแนนให้ถ้าเลือกข้อ 2")
                 .setRequired(true)
+                .setAutocomplete(true)
             )
             .addStringOption((opt) =>
               opt
@@ -388,6 +390,7 @@ export function getSlashCommandDefinitions() {
                 .setName("opt3_result")
                 .setDescription("ชื่อผลลัพธ์สำหรับตัวเลือกที่ 3 (ไม่บังคับ)")
                 .setRequired(false)
+                .setAutocomplete(true)
             )
             .addStringOption((opt) =>
               opt
@@ -400,6 +403,7 @@ export function getSlashCommandDefinitions() {
                 .setName("opt4_result")
                 .setDescription("ชื่อผลลัพธ์สำหรับตัวเลือกที่ 4 (ไม่บังคับ)")
                 .setRequired(false)
+                .setAutocomplete(true)
             )
         )
         .addSubcommand((sub) =>
@@ -440,6 +444,7 @@ export function getSlashCommandDefinitions() {
                 .setName("title")
                 .setDescription("ชื่อผลลัพธ์ที่ต้องการลบ")
                 .setRequired(true)
+                .setAutocomplete(true)
             )
         )
         .addSubcommand((sub) =>
