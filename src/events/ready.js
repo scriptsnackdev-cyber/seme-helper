@@ -161,18 +161,18 @@ export function getSlashCommandDefinitions() {
                     .addChannelTypes(ChannelType.GuildText)
                     .setRequired(true)
                 )
+                .addStringOption((opt) =>
+                  opt
+                    .setName("question1")
+                    .setDescription("คำถามที่ 1")
+                    .setRequired(true)
+                )
                 .addChannelOption((opt) =>
                   opt
                     .setName("announce")
                     .setDescription("ห้องสำหรับส่งข้อความต้อนรับเมื่ออนุมัติสมาชิก พร้อมบอกชื่อ/คำตอบข้อ 1 (ไม่บังคับ)")
                     .addChannelTypes(ChannelType.GuildText)
                     .setRequired(false)
-                )
-                .addStringOption((opt) =>
-                  opt
-                    .setName("question1")
-                    .setDescription("คำถามที่ 1")
-                    .setRequired(true)
                 )
                 .addStringOption((opt) =>
                   opt
