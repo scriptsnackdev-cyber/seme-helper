@@ -50,8 +50,8 @@ function buildQuestionPayload(guildId, qIndex) {
   const progressBarText = renderProgressBar(qIndex, total);
 
   const embed = new EmbedBuilder()
-    .setTitle(`🐾 ${config.title || "แบบทดสอบ"}: ข้อที่ ${qIndex + 1}/${total}`)
-    .setDescription(`${progressBarText}\n\n🐾 **คำถาม:** ${question.text}\n\n*เลือกสิ่งที่ตรงกับตัวคุณมากที่สุดนะเมี้ยว! 🐾*`)
+    .setTitle(`${config.title || "แบบทดสอบ"}: ข้อที่ ${qIndex + 1}/${total}`)
+    .setDescription(`${progressBarText}\n\n**คำถาม:** ${question.text}\n\n*เลือกสิ่งที่ตรงกับคุณมากที่สุด*`)
     .setColor(0xff69b4);
 
   const rows = [];
@@ -211,8 +211,8 @@ export function setupInteractionCreateEvent(client) {
                 const q1Answer = q1Field?.value || targetMember.displayName || targetMember.user.username;
 
                 const welcomeEmbed = new EmbedBuilder()
-                  .setTitle(`🎪 ยินดีต้อนรับสมาชิกใหม่!`)
-                  .setDescription(`ขอต้อนรับ <@${targetMember.id}> เข้าสู่ ${guild.name} ค่ะ! 🎉✨\n\n📌 **${q1Question}:** **${q1Answer}**`)
+                  .setTitle(`ยินดีต้อนรับสมาชิกใหม่`)
+                  .setDescription(`ขอต้อนรับ <@${targetMember.id}> เข้าสู่ ${guild.name} ค่ะ\n\n**${q1Question}:** **${q1Answer}**`)
                   .setColor(0xff69b4)
                   .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true }))
                   .setFooter({
@@ -222,7 +222,7 @@ export function setupInteractionCreateEvent(client) {
                   .setTimestamp();
 
                 const announcePayload = {
-                  content: `🎉 ยินดีต้อนรับสมาชิกใหม่ <@${targetMember.id}> เข้าสู่เซิร์ฟเวอร์ค่ะ! ✨ (ชื่อ/คำตอบ: **${q1Answer}**)`,
+                  content: `ยินดีต้อนรับสมาชิกใหม่ <@${targetMember.id}> เข้าสู่เซิร์ฟเวอร์ค่ะ (${q1Question}: **${q1Answer}**)`,
                   embeds: [welcomeEmbed],
                 };
 
@@ -341,26 +341,26 @@ export function setupInteractionCreateEvent(client) {
 
           quizSessions.delete(sessionKey);
 
-          let desc = `🎉 **ขอแสดงความยินดีด้วยค่ะ! คุณได้ผลลัพธ์:** **${result?.title || "ไม่ทราบผล"}**\n\n`;
-          if (result?.description) desc += `ℹ️ ${result.description}\n\n`;
+          let desc = `**ผลลัพธ์ของคุณคือ:** **${result?.title || "ไม่ทราบผล"}**\n\n`;
+          if (result?.description) desc += `${result.description}\n\n`;
           if (roleAddedSuccess && result?.roleId) {
-            desc += `✨ ระบบได้มอบยศ <@&${result.roleId}> ให้กับคุณเรียบร้อยแล้วค่ะ! 💖`;
+            desc += `ระบบได้มอบยศ <@&${result.roleId}> ให้กับคุณเรียบร้อยแล้วค่ะ`;
           } else if (result?.roleId) {
-            desc += `⚠️ ระบบไม่สามารถแจกยศ <@&${result.roleId}> ให้คุณได้ (กรุณาแจ้งแอดมินให้ตรวจสอบสิทธิ์ Manage Roles ของบอทนะคะ)`;
+            desc += `ระบบไม่สามารถแจกยศ <@&${result.roleId}> ให้คุณได้ (กรุณาแจ้งแอดมินให้ตรวจสอบสิทธิ์ Manage Roles ของบอทนะคะ)`;
           }
 
           const resultEmbed = new EmbedBuilder()
-            .setTitle(`💸 ผลทดสอบ ${config.title || "ควิซ"}: ${result?.title || "ผลลัพธ์"}`)
+            .setTitle(`ผลทดสอบ ${config.title || "ควิซ"}: ${result?.title || "ผลลัพธ์"}`)
             .setDescription(desc)
             .setColor(0xff69b4)
             .setFooter({
-              text: `${interaction.guild?.name || "PurrPaw"} Interactive Quiz`,
+              text: `${interaction.guild?.name || "Server"} Interactive Quiz`,
               iconURL: interaction.guild?.iconURL({ dynamic: true }) || undefined,
             })
             .setTimestamp();
 
           const updatePayload = {
-            content: `🎉 **สรุปผลแบบทดสอบของคุณเรียบร้อยแล้วค่ะ!**`,
+            content: `**สรุปผลแบบทดสอบของคุณเรียบร้อยแล้วค่ะ**`,
             embeds: [resultEmbed],
             components: [],
           };
@@ -418,15 +418,15 @@ export function setupInteractionCreateEvent(client) {
           .setTitle(`📝 คำตอบฟอร์มคัดกรองใหม่จาก: ${member.user.tag}`)
           .setDescription(`👤 **ผู้ส่ง:** <@${member.id}> (${member.user.tag})\n🆔 **User ID:** \`${member.id}\``)
           .setColor(0xfee75c)
-          .addFields({ name: `📌 ${memberFormSettings.question1}`, value: q1Ans || "-" })
+          .addFields({ name: `${memberFormSettings.question1}`, value: q1Ans || "-" })
           .setFooter({ text: `ส่งเมื่อ`, iconURL: member.user.displayAvatarURL({ dynamic: true }) })
           .setTimestamp();
 
         if (memberFormSettings.question2 && q2Ans) {
-          logEmbed.addFields({ name: `📌 ${memberFormSettings.question2}`, value: q2Ans });
+          logEmbed.addFields({ name: `${memberFormSettings.question2}`, value: q2Ans });
         }
         if (memberFormSettings.question3 && q3Ans) {
-          logEmbed.addFields({ name: `📌 ${memberFormSettings.question3}`, value: q3Ans });
+          logEmbed.addFields({ name: `${memberFormSettings.question3}`, value: q3Ans });
         }
 
         const approveBtn = new ButtonBuilder()

@@ -118,7 +118,7 @@ export function getMemberFormBannerPath(guildId) {
 export function getQuizConfig(guildId) {
   ensureGuildDatabase(guildId);
   const filePath = path.join(DATABASE_DIR, guildId, "quiz", "config.json");
-  const defaultConfig = { title: "แบบทดสอบวัดระดับยศ", description: "", buttonText: "🧠 ทำแบบทดสอบ", results: [], questions: [] };
+  const defaultConfig = { title: "แบบทดสอบวัดระดับยศ", description: "", buttonText: "ทำแบบทดสอบ", results: [], questions: [] };
   if (!fs.existsSync(filePath)) {
     writeJson(filePath, defaultConfig);
     return defaultConfig;

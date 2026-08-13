@@ -116,7 +116,7 @@ export async function handleQuizCommand(interaction) {
 
     const title = interaction.options.getString("title") || config.title || "แบบทดสอบวัดระดับยศ";
     const description = interaction.options.getString("description") || config.description || "กดปุ่มด้านล่างเพื่อเริ่มทำแบบทดสอบและวัดยศของคุณ!";
-    const buttonText = interaction.options.getString("button") || config.buttonText || "🧠 ทำแบบทดสอบ";
+    const buttonText = interaction.options.getString("button") || config.buttonText || "ทำแบบทดสอบ";
     const bannerAttachment = interaction.options.getAttachment("header-banner");
 
     config.title = title;
@@ -144,11 +144,11 @@ export async function handleQuizCommand(interaction) {
     }
 
     const embed = new EmbedBuilder()
-      .setTitle(`🧠 ${title}`)
+      .setTitle(title)
       .setDescription(description)
       .setColor(0xff69b4)
       .setFooter({
-        text: `${interaction.guild?.name || "PurrPaw"} Interactive Quiz System`,
+        text: `${interaction.guild?.name || "Server"} Interactive Quiz System`,
         iconURL: interaction.guild?.iconURL({ dynamic: true }) || undefined,
       })
       .setTimestamp();
