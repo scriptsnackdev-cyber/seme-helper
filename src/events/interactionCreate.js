@@ -177,6 +177,22 @@ export function setupInteractionCreateEvent(client) {
           return;
         }
 
+        const originalEmbed = interaction.message.embeds[0];
+        if (!originalEmbed) {
+          await interaction.reply({ content: "❌ ไม่พบข้อมูลฟอร์มในข้อความนี้ค่ะ", ephemeral: true });
+          return;
+        }
+
+        // ป้องกันการกดย้ำหรือทำรายการซ้ำซ้อน
+        if (originalEmbed.title?.startsWith("✅") || originalEmbed.title?.startsWith("❌")) {
+          await interaction.reply({ content: "⚠️ รายการนี้ได้รับการตรวจสอบเรียบร้อยแล้วค่ะ", ephemeral: true });
+          return;
+        }
+
+        // แจ้ง Discord ล่วงหน้าทันที เพื่อป้องกัน interaction timeout 3 วินาที
+        // เนื่องจากกระบวนการแจกยศ/ถอดยศ และการส่งรูปแบนเนอร์ประกาศต้อนรับอาจใช้เวลาเกิน 3 วินาที
+        await interaction.deferUpdate();
+
         const isApprove = interaction.customId.startsWith("approve_member_");
         const targetUserId = interaction.customId.replace(isApprove ? "approve_member_" : "reject_member_", "");
         const guild = interaction.guild;
@@ -186,7 +202,7 @@ export function setupInteractionCreateEvent(client) {
         const targetMember = await guild.members.fetch(targetUserId).catch(() => null);
 
         if (!targetMember) {
-          await interaction.reply({ content: "❌ ไม่พบสมาชิกในเซิร์ฟเวอร์นี้ (สมาชิกอาจจะออกจากเซิร์ฟเวอร์ไปแล้วค่ะ)", ephemeral: true });
+          await interaction.followUp({ content: "❌ ไม่พบสมาชิกในเซิร์ฟเวอร์นี้ (สมาชิกอาจจะออกจากเซิร์ฟเวอร์ไปแล้วค่ะ)", ephemeral: true });
           return;
         }
 
@@ -205,7 +221,6 @@ export function setupInteractionCreateEvent(client) {
             if (memberFormSettings.announceChannelId) {
               const announceChannel = await guild.channels.fetch(memberFormSettings.announceChannelId).catch(() => null);
               if (announceChannel) {
-                const originalEmbed = interaction.message.embeds[0];
                 const q1Field = originalEmbed?.fields?.[0];
                 const q1Question = memberFormSettings.question1 || q1Field?.name?.replace(/^📌\s*/, "") || "ชื่อ";
                 const q1Answer = q1Field?.value || targetMember.displayName || targetMember.user.username;
@@ -240,19 +255,23 @@ export function setupInteractionCreateEvent(client) {
             }
           }
 
-          const originalEmbed = interaction.message.embeds[0];
           const updatedEmbed = EmbedBuilder.from(originalEmbed)
             .setColor(0x57f287)
             .setTitle(`✅ อนุมัติสมาชิกเรียบร้อยแล้ว (โดย ${interaction.user.username})`);
 
-          await interaction.update({ embeds: [updatedEmbed], components: [] });
+          await interaction.editReply({ embeds: [updatedEmbed], components: [] }).catch(async (err) => {
+            console.warn("⚠️ editReply ล้มเหลว พยายามใช้ message.edit แทน:", err.message);
+            await interaction.message.edit({ embeds: [updatedEmbed], components: [] }).catch(() => null);
+          });
         } else {
-          const originalEmbed = interaction.message.embeds[0];
           const updatedEmbed = EmbedBuilder.from(originalEmbed)
             .setColor(0xed4245)
             .setTitle(`❌ ไม่อนุมัติสมาชิก (โดย ${interaction.user.username})`);
 
-          await interaction.update({ embeds: [updatedEmbed], components: [] });
+          await interaction.editReply({ embeds: [updatedEmbed], components: [] }).catch(async (err) => {
+            console.warn("⚠️ editReply ล้มเหลว พยายามใช้ message.edit แทน:", err.message);
+            await interaction.message.edit({ embeds: [updatedEmbed], components: [] }).catch(() => null);
+          });
         }
         return;
       }
