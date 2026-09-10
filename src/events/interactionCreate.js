@@ -202,11 +202,25 @@ export function setupInteractionCreateEvent(client) {
         const targetMember = await guild.members.fetch(targetUserId).catch(() => null);
 
         if (!targetMember) {
+          const updatedEmbed = EmbedBuilder.from(originalEmbed)
+            .setColor(0x95a5a6)
+            .setTitle(`⚠️ ไม่พบสมาชิกในเซิร์ฟเวอร์ (โดย ${interaction.user.username})`);
+          await interaction.editReply({ embeds: [updatedEmbed], components: [] }).catch(() => null);
           await interaction.followUp({ content: "❌ ไม่พบสมาชิกในเซิร์ฟเวอร์นี้ (สมาชิกอาจจะออกจากเซิร์ฟเวอร์ไปแล้วค่ะ)", ephemeral: true });
           return;
         }
 
         if (isApprove) {
+          // อัปเดต Embed เป็นสีเขียวและนำปุ่มออกทันที เพื่อให้ UI เปลี่ยนทันตาและป้องกันการกดซ้ำ
+          const updatedEmbed = EmbedBuilder.from(originalEmbed)
+            .setColor(0x57f287)
+            .setTitle(`✅ อนุมัติสมาชิกเรียบร้อยแล้ว (โดย ${interaction.user.username})`);
+
+          await interaction.editReply({ embeds: [updatedEmbed], components: [] }).catch(async (err) => {
+            console.warn("⚠️ editReply ล้มเหลว พยายามใช้ message.edit แทน:", err.message);
+            await interaction.message.edit({ embeds: [updatedEmbed], components: [] }).catch(() => null);
+          });
+
           if (memberFormSettings) {
             if (memberFormSettings.pendingRoleId) {
               const pRole = await guild.roles.fetch(memberFormSettings.pendingRoleId).catch(() => null);
@@ -254,15 +268,6 @@ export function setupInteractionCreateEvent(client) {
               }
             }
           }
-
-          const updatedEmbed = EmbedBuilder.from(originalEmbed)
-            .setColor(0x57f287)
-            .setTitle(`✅ อนุมัติสมาชิกเรียบร้อยแล้ว (โดย ${interaction.user.username})`);
-
-          await interaction.editReply({ embeds: [updatedEmbed], components: [] }).catch(async (err) => {
-            console.warn("⚠️ editReply ล้มเหลว พยายามใช้ message.edit แทน:", err.message);
-            await interaction.message.edit({ embeds: [updatedEmbed], components: [] }).catch(() => null);
-          });
         } else {
           const updatedEmbed = EmbedBuilder.from(originalEmbed)
             .setColor(0xed4245)
