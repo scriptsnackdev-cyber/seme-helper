@@ -9,6 +9,7 @@ import {
   ActionRowBuilder,
   ButtonStyle,
   ButtonBuilder,
+  PermissionFlagsBits,
 } from "discord.js";
 
 import {
@@ -26,14 +27,26 @@ import { handleSetMemberCommands } from "../commands/set/setMember.js";
 import { handleSetLevelingCommands } from "../commands/set/setLeveling.js";
 import { handleSetGiveRoleCommands } from "../commands/set/setGiveRole.js";
 import { handleSetHelperCommands } from "../commands/set/setHelper.js";
+import { handleSetIntroCommands } from "../commands/set/setIntro.js";
 import { handleGiveRoleCommand } from "../commands/giverole.js";
 import { handleQuizCommand } from "../commands/quiz.js";
 import { handleImageCommand } from "../commands/image.js";
 import { handleHelperCommand } from "../commands/helper.js";
-import { isMemberHigherThanBot } from "../utils/permission.js";
+import { handleRankCommand, handleLeaderboardCommand } from "../commands/rank.js";
+import { isMemberHigherThanBot, hasStaffPermission } from "../utils/permission.js";
 import { sendHelperMessage } from "../utils/helper.js";
 
 const quizSessions = new Map();
+
+// ทำความสะอาดเซสชัน Quiz ที่หมดอายุเกิน 15 นาที เพื่อป้องกัน Memory Leak
+function cleanupQuizSessions() {
+  const now = Date.now();
+  for (const [key, session] of quizSessions.entries()) {
+    if (now - (session.createdAt || 0) > 15 * 60 * 1000) {
+      quizSessions.delete(key);
+    }
+  }
+}
 
 function renderProgressBar(current, total) {
   const percentage = Math.round(((current + 1) / total) * 100);
@@ -168,10 +181,10 @@ export function setupInteractionCreateEvent(client) {
 
       // 3. ปุ่มอนุมัติ / ปฏิเสธฟอร์มคัดกรองของทีมงาน
       if (interaction.isButton() && (interaction.customId.startsWith("approve_member_") || interaction.customId.startsWith("reject_member_"))) {
-        const hasPermission = await isMemberHigherThanBot(interaction);
+        const hasPermission = await hasStaffPermission(interaction, PermissionFlagsBits.ManageRoles);
         if (!hasPermission) {
           await interaction.reply({
-            content: "❌ เฉพาะทีมงานที่มียศสูงกว่าบอทเท่านั้นที่สามารถกดอนุมัติหรือปฏิเสธสมาชิกได้ค่ะ",
+            content: "❌ เฉพาะทีมงานที่มีสิทธิ์จัดการยศ (Manage Roles) หรือยศสูงกว่าบอทเท่านั้นที่สามารถกดอนุมัติหรือปฏิเสธสมาชิกได้ค่ะ",
             ephemeral: true,
           });
           return;
@@ -184,13 +197,11 @@ export function setupInteractionCreateEvent(client) {
         }
 
         // ป้องกันการกดย้ำหรือทำรายการซ้ำซ้อน
-        if (originalEmbed.title?.startsWith("✅") || originalEmbed.title?.startsWith("❌")) {
+        if (originalEmbed.title?.startsWith("✅") || originalEmbed.title?.startsWith("❌") || originalEmbed.title?.startsWith("⚠️")) {
           await interaction.reply({ content: "⚠️ รายการนี้ได้รับการตรวจสอบเรียบร้อยแล้วค่ะ", ephemeral: true });
           return;
         }
 
-        // แจ้ง Discord ล่วงหน้าทันที เพื่อป้องกัน interaction timeout 3 วินาที
-        // เนื่องจากกระบวนการแจกยศ/ถอดยศ และการส่งรูปแบนเนอร์ประกาศต้อนรับอาจใช้เวลาเกิน 3 วินาที
         await interaction.deferUpdate();
 
         const isApprove = interaction.customId.startsWith("approve_member_");
@@ -211,7 +222,45 @@ export function setupInteractionCreateEvent(client) {
         }
 
         if (isApprove) {
-          // อัปเดต Embed เป็นสีเขียวและนำปุ่มออกทันที เพื่อให้ UI เปลี่ยนทันตาและป้องกันการกดซ้ำ
+          let roleError = null;
+
+          if (memberFormSettings) {
+            if (memberFormSettings.pendingRoleId) {
+              const pRole = await guild.roles.fetch(memberFormSettings.pendingRoleId).catch(() => null);
+              if (pRole) {
+                await targetMember.roles.remove(pRole).catch((err) => {
+                  console.warn("⚠️ ไม่สามารถถอดยศ Pending ได้:", err.message);
+                });
+              }
+            }
+            if (memberFormSettings.approvedRoleId) {
+              const aRole = await guild.roles.fetch(memberFormSettings.approvedRoleId).catch(() => null);
+              if (aRole) {
+                try {
+                  await targetMember.roles.add(aRole);
+                } catch (err) {
+                  console.error("❌ ไม่สามารถแจกยศ Approved Role ได้:", err);
+                  roleError = err.message;
+                }
+              }
+            }
+          }
+
+          if (roleError) {
+            const warningEmbed = EmbedBuilder.from(originalEmbed)
+              .setColor(0xfee75c)
+              .setTitle(`⚠️ อนุมัติแล้วแต่แจกยศไม่สำเร็จ (โดย ${interaction.user.username})`);
+            await interaction.editReply({ embeds: [warningEmbed], components: [] }).catch(async () => {
+              await interaction.message.edit({ embeds: [warningEmbed], components: [] }).catch(() => null);
+            });
+            await interaction.followUp({
+              content: `⚠️ อนุมัติสมาชิกเรียบร้อยแล้วแต่บอทไม่สามารถมอบยศได้: ${roleError} (กรุณาตรวจสอบว่ายศบอทอยู่สูงกว่ายศที่จะแจกใน Server Settings หรือไม่)`,
+              ephemeral: true,
+            });
+            return;
+          }
+
+          // อัปเดต Embed เป็นสีเขียวเมื่อแจกยศสำเร็จ
           const updatedEmbed = EmbedBuilder.from(originalEmbed)
             .setColor(0x57f287)
             .setTitle(`✅ อนุมัติสมาชิกเรียบร้อยแล้ว (โดย ${interaction.user.username})`);
@@ -220,55 +269,8 @@ export function setupInteractionCreateEvent(client) {
             console.warn("⚠️ editReply ล้มเหลว พยายามใช้ message.edit แทน:", err.message);
             await interaction.message.edit({ embeds: [updatedEmbed], components: [] }).catch(() => null);
           });
-
-          if (memberFormSettings) {
-            if (memberFormSettings.pendingRoleId) {
-              const pRole = await guild.roles.fetch(memberFormSettings.pendingRoleId).catch(() => null);
-              if (pRole) await targetMember.roles.remove(pRole).catch(() => null);
-            }
-            if (memberFormSettings.approvedRoleId) {
-              const aRole = await guild.roles.fetch(memberFormSettings.approvedRoleId).catch(() => null);
-              if (aRole) await targetMember.roles.add(aRole).catch(() => null);
-            }
-
-            // ส่งข้อความประกาศต้อนรับไปที่ห้อง announce (ถ้ามีการตั้งค่าไว้)
-            if (memberFormSettings.announceChannelId) {
-              const announceChannel = await guild.channels.fetch(memberFormSettings.announceChannelId).catch(() => null);
-              if (announceChannel) {
-                const q1Field = originalEmbed?.fields?.[0];
-                const q1Question = memberFormSettings.question1 || q1Field?.name?.replace(/^📌\s*/, "") || "ชื่อ";
-                const q1Answer = q1Field?.value || targetMember.displayName || targetMember.user.username;
-
-                const welcomeEmbed = new EmbedBuilder()
-                  .setTitle(`ยินดีต้อนรับสมาชิกใหม่`)
-                  .setDescription(`ขอต้อนรับ <@${targetMember.id}> เข้าสู่ ${guild.name} ค่ะ\n\n**${q1Question}:** **${q1Answer}**`)
-                  .setColor(0xff69b4)
-                  .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true }))
-                  .setFooter({
-                    text: `${guild.name} Verification System`,
-                    iconURL: guild.iconURL({ dynamic: true }) || undefined,
-                  })
-                  .setTimestamp();
-
-                const announcePayload = {
-                  content: `ยินดีต้อนรับสมาชิกใหม่ <@${targetMember.id}> เข้าสู่เซิร์ฟเวอร์ค่ะ (${q1Question}: **${q1Answer}**)`,
-                  embeds: [welcomeEmbed],
-                };
-
-                const bannerInfo = getMemberFormBannerPath(guildId);
-                if (bannerInfo) {
-                  const bannerAttachmentFile = new AttachmentBuilder(bannerInfo.path, { name: bannerInfo.filename });
-                  welcomeEmbed.setImage(`attachment://${bannerInfo.filename}`);
-                  announcePayload.files = [bannerAttachmentFile];
-                }
-
-                await sendHelperMessage(announceChannel, announcePayload, guildId).catch((err) => {
-                  console.error("❌ ไม่สามารถส่งข้อความประกาศต้อนรับที่ห้อง announce ได้:", err);
-                });
-              }
-            }
-          }
         } else {
+          // กรณีไม่อนุมัติ: ไม่แตะต้องยศเดิม (ไม่ถอดยศชั่วคราว และไม่ให้ยศจริง)
           const updatedEmbed = EmbedBuilder.from(originalEmbed)
             .setColor(0xed4245)
             .setTitle(`❌ ไม่อนุมัติสมาชิก (โดย ${interaction.user.username})`);
@@ -278,11 +280,49 @@ export function setupInteractionCreateEvent(client) {
             await interaction.message.edit({ embeds: [updatedEmbed], components: [] }).catch(() => null);
           });
         }
+
+        // ส่งข้อความประกาศต้อนรับไปที่ห้อง announce (เหมือนกัน 100% ทั้งกรณีอนุมัติและไม่อนุมัติ)
+        if (memberFormSettings && memberFormSettings.announceChannelId) {
+          const announceChannel = await guild.channels.fetch(memberFormSettings.announceChannelId).catch(() => null);
+          if (announceChannel) {
+            const q1Field = originalEmbed?.fields?.[0];
+            const q1Question = memberFormSettings.question1 || q1Field?.name?.replace(/^📌\s*/, "") || "ชื่อ";
+            const q1Answer = q1Field?.value || targetMember.displayName || targetMember.user.username;
+
+            const welcomeEmbed = new EmbedBuilder()
+              .setTitle(`ยินดีต้อนรับสมาชิกใหม่`)
+              .setDescription(`ขอต้อนรับ <@${targetMember.id}> เข้าสู่ ${guild.name} ค่ะ\n\n**${q1Question}:** **${q1Answer}**`)
+              .setColor(0xff69b4)
+              .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true }))
+              .setFooter({
+                text: `${guild.name} Verification System`,
+                iconURL: guild.iconURL({ dynamic: true }) || undefined,
+              })
+              .setTimestamp();
+
+            const announcePayload = {
+              content: `ยินดีต้อนรับสมาชิกใหม่ <@${targetMember.id}> เข้าสู่เซิร์ฟเวอร์ค่ะ (${q1Question}: **${q1Answer}**)`,
+              embeds: [welcomeEmbed],
+            };
+
+            const bannerInfo = getMemberFormBannerPath(guildId);
+            if (bannerInfo) {
+              const bannerAttachmentFile = new AttachmentBuilder(bannerInfo.path, { name: bannerInfo.filename });
+              welcomeEmbed.setImage(`attachment://${bannerInfo.filename}`);
+              announcePayload.files = [bannerAttachmentFile];
+            }
+
+            await sendHelperMessage(announceChannel, announcePayload, guildId).catch((err) => {
+              console.error("❌ ไม่สามารถส่งข้อความประกาศต้อนรับที่ห้อง announce ได้:", err);
+            });
+          }
+        }
         return;
       }
 
       // 4. ปุ่มเริ่มทำ Quiz
       if (interaction.isButton() && interaction.customId === "start_quiz_btn") {
+        cleanupQuizSessions();
         const guildId = interaction.guildId;
         const userId = interaction.user.id;
         const config = getQuizConfig(guildId);
@@ -296,6 +336,7 @@ export function setupInteractionCreateEvent(client) {
         quizSessions.set(sessionKey, {
           currentIndex: 0,
           scores: {},
+          createdAt: Date.now(),
         });
 
         const payload = buildQuestionPayload(guildId, 0);
@@ -475,7 +516,7 @@ export function setupInteractionCreateEvent(client) {
       }
 
       if (interaction.isAutocomplete()) {
-        const hasPermission = await isMemberHigherThanBot(interaction);
+        const hasPermission = await hasStaffPermission(interaction, PermissionFlagsBits.ManageGuild);
         if (!hasPermission) {
           await interaction.respond([]).catch(() => null);
           return;
@@ -529,18 +570,49 @@ export function setupInteractionCreateEvent(client) {
 
       const { commandName, guildId } = interaction;
 
-      // ตรวจสอบสิทธิ์: เฉพาะผู้ที่มียศสูงกว่าบอท (หรือ Server Owner) เท่านั้นที่สามารถใช้คำสั่งได้
-      const hasPermission = await isMemberHigherThanBot(interaction);
-      if (!hasPermission) {
-        await interaction.reply({
-          content: "❌ คุณไม่มียศที่สูงกว่าบอท จึงไม่สามารถใช้งานคำสั่งนี้ได้ค่ะ (อนุญาตเฉพาะผู้ดูแลที่มียศสูงกว่าบอทเท่านั้น)",
-          ephemeral: true,
-        });
+      // 1. คำสั่งสาธารณะ (Public Command) - สมาชิกทุกคนใช้งานได้
+      if (commandName === "ping") {
+        await interaction.reply({ content: "Pong! 🏓", ephemeral: true });
         return;
       }
 
-      if (commandName === "ping") {
-        await interaction.reply({ content: "Pong! 🏓", ephemeral: true });
+      if (commandName === "rank") {
+        await handleRankCommand(interaction);
+        return;
+      }
+
+      if (commandName === "leaderboard") {
+        await handleLeaderboardCommand(interaction);
+        return;
+      }
+
+      // 2. คำสั่งมอบยศ (Role Command) - มีระบบเช็กสิทธิ์ ManageRoles และ Role Hierarchy ภายในฟังก์ชัน
+      if (commandName === "giverole") {
+        await handleGiveRoleCommand(interaction);
+        return;
+      }
+
+      // 3. คำสั่งบอทผู้ช่วย (Helper Message Command) - เฉพาะผู้มีสิทธิ์ ManageMessages หรือยศสูงกว่าบอท
+      if (commandName === "helper") {
+        const hasPermission = await hasStaffPermission(interaction, PermissionFlagsBits.ManageMessages);
+        if (!hasPermission) {
+          await interaction.reply({
+            content: "❌ คุณไม่มีสิทธิ์จัดการข้อความ (Manage Messages) หรือยศของคุณไม่สูงกว่าบอท จึงไม่สามารถใช้คำสั่งนี้ได้ค่ะ",
+            ephemeral: true,
+          });
+          return;
+        }
+        await handleHelperCommand(interaction);
+        return;
+      }
+
+      // 4. คำสั่งตั้งค่าเซิร์ฟเวอร์และระบบคลังรูปภาพ (Server Config: set, quiz, image) - เฉพาะผู้มีสิทธิ์ ManageGuild หรือ Admin
+      const hasPermission = await hasStaffPermission(interaction, PermissionFlagsBits.ManageGuild);
+      if (!hasPermission) {
+        await interaction.reply({
+          content: "❌ คุณไม่มีสิทธิ์จัดการเซิร์ฟเวอร์ (Manage Server) ในการใช้งานคำสั่งนี้ค่ะ (อนุญาตเฉพาะผู้ดูแลเซิร์ฟเวอร์เท่านั้น)",
+          ephemeral: true,
+        });
         return;
       }
 
@@ -565,16 +637,13 @@ export function setupInteractionCreateEvent(client) {
           await handleSetGiveRoleCommands(interaction);
         } else if (subcommandGroup === "helper" || subcommand === "helper") {
           await handleSetHelperCommands(interaction);
+        } else if (subcommandGroup === "intro" || subcommand === "intro") {
+          await handleSetIntroCommands(interaction);
         } else {
           if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({ content: "⚠️ ไม่พบฟังก์ชันคำสั่งที่เลือกค่ะ", ephemeral: true });
           }
         }
-        return;
-      }
-
-      if (commandName === "giverole") {
-        await handleGiveRoleCommand(interaction);
         return;
       }
 
@@ -585,11 +654,6 @@ export function setupInteractionCreateEvent(client) {
 
       if (commandName === "image") {
         await handleImageCommand(interaction);
-        return;
-      }
-
-      if (commandName === "helper") {
-        await handleHelperCommand(interaction);
         return;
       }
     } catch (err) {

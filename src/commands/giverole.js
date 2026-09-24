@@ -1,6 +1,7 @@
 import { PermissionFlagsBits, AttachmentBuilder } from "discord.js";
 import { getGiveRoleBannerPath } from "../utils/db.js";
 import { generateGiveRoleCard } from "../utils/canvas.js";
+import { hasStaffPermission } from "../utils/permission.js";
 
 export async function handleGiveRoleCommand(interaction) {
   const { guildId } = interaction;
@@ -9,8 +10,31 @@ export async function handleGiveRoleCommand(interaction) {
     return;
   }
 
+  // 1. ตรวจสอบสิทธิ์ผู้สั่ง (ต้องมีสิทธิ์ Manage Roles หรือ Admin หรือยศสูงกว่าบอท)
+  const hasPerm = await hasStaffPermission(interaction, PermissionFlagsBits.ManageRoles);
+  if (!hasPerm) {
+    await interaction.reply({
+      content: "❌ คุณไม่มีสิทธิ์จัดการยศ (Manage Roles) ในการใช้งานคำสั่งนี้ค่ะ",
+      ephemeral: true,
+    });
+    return;
+  }
+
   const targetUser = interaction.options.getUser("user");
   const role = interaction.options.getRole("role");
+
+  // 2. ตรวจสอบความปลอดภัย: คนสั่งไม่สามารถแจกยศที่สูงกว่าหรือเท่ากับยศของตัวเองได้ (ยกเว้น Server Owner)
+  const callerMember = interaction.member;
+  if (interaction.guild.ownerId !== interaction.user.id && callerMember) {
+    const callerHighestPos = callerMember.roles?.highest?.position ?? 0;
+    if (role.position >= callerHighestPos) {
+      await interaction.reply({
+        content: `❌ คุณไม่สามารถแจกยศ <@&${role.id}> ได้ เนื่องจากยศนี้อยู่สูงกว่าหรือเท่ากับยศสูงสุดของคุณค่ะ`,
+        ephemeral: true,
+      });
+      return;
+    }
+  }
 
   const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
   if (!member) {
@@ -25,7 +49,7 @@ export async function handleGiveRoleCommand(interaction) {
   }
 
   if (role.position >= botMember.roles.highest.position) {
-    await interaction.reply({ content: `❌ บอทไม่สามารถแจกยศ <@&${role.id}> ได้เนื่องจากยศนี้อยู่สูงกว่าหรือเท่ากับยศสูงสุดของบอทค่ะ`, ephemeral: true });
+    await interaction.reply({ content: `❌ บอทไม่สามารถแจกยศ <@&${role.id}> ได้เนื่องจากยศนี้อยู่สูงกว่าหรือเท่ากับยศสูงสุดของบอทค่ะ (กรุณาลากยศบอทให้อยู่สูงกว่ายศที่จะแจกใน Server Settings)`, ephemeral: true });
     return;
   }
 

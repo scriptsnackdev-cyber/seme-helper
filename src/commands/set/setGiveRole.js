@@ -15,7 +15,8 @@ export async function handleSetGiveRoleCommands(interaction) {
     const bannerPngPath = path.join(DATABASE_DIR, guildId, "giverole", "banner.png");
     const bannerGifPath = path.join(DATABASE_DIR, guildId, "giverole", "banner.gif");
     const bannerWebpPath = path.join(DATABASE_DIR, guildId, "giverole", "banner.webp");
-    const tempVideoPath = path.join(DATABASE_DIR, guildId, "giverole", "temp_input.mp4");
+    const randomSuffix = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const tempVideoPath = path.join(DATABASE_DIR, guildId, "giverole", `temp_${randomSuffix}.mp4`);
 
     if (fs.existsSync(bannerPngPath)) fs.unlinkSync(bannerPngPath);
     if (fs.existsSync(bannerGifPath)) fs.unlinkSync(bannerGifPath);

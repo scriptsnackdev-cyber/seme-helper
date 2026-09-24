@@ -38,6 +38,7 @@ export function ensureGuildDatabase(guildId) {
   const quizResultsDir = path.join(guildDir, "quiz", "results");
   const levelingDir = path.join(guildDir, "leveling");
   const giveroleDir = path.join(guildDir, "giverole");
+  const introDir = path.join(guildDir, "intro");
 
   if (!fs.existsSync(welcomeDir)) fs.mkdirSync(welcomeDir, { recursive: true });
   if (!fs.existsSync(memberDir)) fs.mkdirSync(memberDir, { recursive: true });
@@ -46,6 +47,7 @@ export function ensureGuildDatabase(guildId) {
   if (!fs.existsSync(quizResultsDir)) fs.mkdirSync(quizResultsDir, { recursive: true });
   if (!fs.existsSync(levelingDir)) fs.mkdirSync(levelingDir, { recursive: true });
   if (!fs.existsSync(giveroleDir)) fs.mkdirSync(giveroleDir, { recursive: true });
+  if (!fs.existsSync(introDir)) fs.mkdirSync(introDir, { recursive: true });
 }
 
 // ==================== DOMAIN HELPERS ==================== //
@@ -198,6 +200,29 @@ export function saveLevelingUserData(guildId, data) {
   writeJson(filePath, data);
 }
 
+const levelingSaveTimeouts = new Map();
+const levelingPendingData = new Map();
+
+/**
+ * บันทึกข้อมูลเลเวลผู้ใช้แบบ Throttled/Debounced เพื่อลดภาระ Sync Disk I/O
+ */
+export function saveLevelingUserDataThrottled(guildId, data, delayMs = 3000) {
+  ensureGuildDatabase(guildId);
+  levelingPendingData.set(guildId, data);
+
+  if (!levelingSaveTimeouts.has(guildId)) {
+    const timeout = setTimeout(() => {
+      levelingSaveTimeouts.delete(guildId);
+      const pending = levelingPendingData.get(guildId);
+      if (pending) {
+        levelingPendingData.delete(guildId);
+        saveLevelingUserData(guildId, pending);
+      }
+    }, delayMs);
+    levelingSaveTimeouts.set(guildId, timeout);
+  }
+}
+
 export function getLevelingBannerPath(guildId) {
   const levDir = path.join(DATABASE_DIR, guildId, "leveling");
   const webpPath = path.join(levDir, "banner.webp");
@@ -263,5 +288,42 @@ export function saveHelperSettings(guildId, settings) {
   ensureGuildDatabase(guildId);
   const filePath = path.join(DATABASE_DIR, guildId, "helper.json");
   writeJson(filePath, settings);
+}
+
+export function getHelperAvatarPath(guildId) {
+  const pngPath = path.join(DATABASE_DIR, guildId, "helper_avatar.png");
+  const webpPath = path.join(DATABASE_DIR, guildId, "helper_avatar.webp");
+  const jpgPath = path.join(DATABASE_DIR, guildId, "helper_avatar.jpg");
+  if (fs.existsSync(pngPath)) return pngPath;
+  if (fs.existsSync(webpPath)) return webpPath;
+  if (fs.existsSync(jpgPath)) return jpgPath;
+  return null;
+}
+
+// 10. Intro Sticky Template Settings
+export function getIntroSettings(guildId) {
+  ensureGuildDatabase(guildId);
+  const filePath = path.join(DATABASE_DIR, guildId, "intro", "setting.json");
+  return readJson(filePath, {
+    enabled: false,
+    channelId: null,
+    channelName: null,
+    message: null,
+    lastMessageId: null,
+  });
+}
+
+export function saveIntroSettings(guildId, settings) {
+  ensureGuildDatabase(guildId);
+  const filePath = path.join(DATABASE_DIR, guildId, "intro", "setting.json");
+  writeJson(filePath, settings);
+}
+
+export function getIntroBannerPath(guildId) {
+  const gifPath = path.join(DATABASE_DIR, guildId, "intro", "banner.gif");
+  const webpPath = path.join(DATABASE_DIR, guildId, "intro", "banner.webp");
+  if (fs.existsSync(gifPath)) return { path: gifPath, filename: "banner.gif" };
+  if (fs.existsSync(webpPath)) return { path: webpPath, filename: "banner.webp" };
+  return null;
 }
 

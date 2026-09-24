@@ -1,5 +1,8 @@
+import fs from "fs";
+import path from "path";
+import sharp from "sharp";
 import { EmbedBuilder } from "discord.js";
-import { getHelperSettings, saveHelperSettings } from "../../utils/db.js";
+import { DATABASE_DIR, ensureGuildDatabase, getHelperSettings, saveHelperSettings, getHelperAvatarPath } from "../../utils/db.js";
 
 export async function handleSetHelperCommands(interaction) {
   const { guildId } = interaction;
@@ -12,23 +15,47 @@ export async function handleSetHelperCommands(interaction) {
     const imageAttachment = interaction.options.getAttachment("image");
     const imageUrl = interaction.options.getString("image_url");
 
-    let avatar = null;
+    let avatarUrl = null;
+    ensureGuildDatabase(guildId);
+    const localAvatarPath = path.join(DATABASE_DIR, guildId, "helper_avatar.png");
 
     if (imageAttachment) {
-      avatar = imageAttachment.url;
+      try {
+        const res = await fetch(imageAttachment.url, {
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        });
+        if (res.ok) {
+          const buffer = Buffer.from(await res.arrayBuffer());
+          await sharp(buffer).png().toFile(localAvatarPath);
+          avatarUrl = imageAttachment.url;
+        }
+      } catch (err) {
+        console.error("❌ ไม่สามารถบันทึกรูปโปรไฟล์ผู้ช่วยได้:", err);
+      }
     } else if (imageUrl) {
-      avatar = imageUrl.trim();
+      avatarUrl = imageUrl.trim();
+      try {
+        const res = await fetch(avatarUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+        });
+        if (res.ok) {
+          const buffer = Buffer.from(await res.arrayBuffer());
+          await sharp(buffer).png().toFile(localAvatarPath);
+        }
+      } catch (err) {
+        console.warn("⚠️ ไม่สามารถโหลดรูปจาก URL มาเซฟในเครื่องได้:", err.message);
+      }
     }
 
     const currentSettings = getHelperSettings(guildId);
-    if (!avatar && currentSettings.avatar) {
-      avatar = currentSettings.avatar;
+    if (!avatarUrl && currentSettings.avatar) {
+      avatarUrl = currentSettings.avatar;
     }
 
     saveHelperSettings(guildId, {
       enabled: true,
       name: name.trim(),
-      avatar: avatar || null,
+      avatar: avatarUrl || null,
     });
 
     const embed = new EmbedBuilder()
@@ -36,13 +63,13 @@ export async function handleSetHelperCommands(interaction) {
       .setDescription(`บอทจะใช้ชื่อและรูปโปรไฟล์นี้ในการส่งข้อความต่างๆ ในเซิร์ฟเวอร์ (Welcome, Announce, Level Up, Form) ค่ะ`)
       .addFields(
         { name: "🏷️ ชื่อผู้ช่วย (Helper Name)", value: `**${name}**`, inline: true },
-        { name: "🖼️ รูปโปรไฟล์ (Avatar)", value: avatar ? `[คลิกเพื่อดูรูป](${avatar})` : "*ใช้รูปเริ่มต้นของบอท*", inline: true }
+        { name: "🖼️ รูปโปรไฟล์ (Avatar)", value: avatarUrl ? `[คลิกเพื่อดูรูป](${avatarUrl})` : (fs.existsSync(localAvatarPath) ? "*บันทึกรูปภาพลงระบบเรียบร้อย*" : "*ใช้รูปเริ่มต้นของบอท*"), inline: true }
       )
       .setColor(0x57f287)
       .setTimestamp();
 
-    if (avatar) {
-      embed.setThumbnail(avatar);
+    if (avatarUrl) {
+      embed.setThumbnail(avatarUrl);
     }
 
     await interaction.editReply({ embeds: [embed] });

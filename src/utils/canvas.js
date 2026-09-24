@@ -25,17 +25,19 @@ export function registerSystemFonts() {
     if (fs.existsSync(symbolsBoldPath)) GlobalFonts.registerFromPath(symbolsBoldPath, "NotoSymbolsBold");
     if (fs.existsSync(symbolsPath)) GlobalFonts.registerFromPath(symbolsPath, "NotoSymbols");
 
-    // ลงทะเบียนฟอนต์ระบบสำหรับสัญลักษณ์พิเศษ 【】 ⪩⪨
-    const sysWinFonts = [
-      { path: "C:\\Windows\\Fonts\\seguisym.ttf", name: "Segoe UI Symbol" },
-      { path: "C:\\Windows\\Fonts\\seguiemj.ttf", name: "Segoe UI Emoji" },
-      { path: "C:\\Windows\\Fonts\\msyh.ttc", name: "Microsoft YaHei" },
-    ];
-    for (const f of sysWinFonts) {
-      if (fs.existsSync(f.path)) {
-        try {
-          GlobalFonts.registerFromPath(f.path, f.name);
-        } catch (e) {}
+    // ลงทะเบียนฟอนต์ระบบสำหรับสัญลักษณ์พิเศษ 【】 ⪩⪨ (เฉพาะ Windows)
+    if (process.platform === "win32") {
+      const sysWinFonts = [
+        { path: "C:\\Windows\\Fonts\\seguisym.ttf", name: "Segoe UI Symbol" },
+        { path: "C:\\Windows\\Fonts\\seguiemj.ttf", name: "Segoe UI Emoji" },
+        { path: "C:\\Windows\\Fonts\\msyh.ttc", name: "Microsoft YaHei" },
+      ];
+      for (const f of sysWinFonts) {
+        if (fs.existsSync(f.path)) {
+          try {
+            GlobalFonts.registerFromPath(f.path, f.name);
+          } catch (e) {}
+        }
       }
     }
 
@@ -121,7 +123,7 @@ export function drawRoundedRect(ctx, x, y, w, h, r) {
 }
 
 // สร้างภาพการ์ด Level Up ด้วย Canvas
-export async function generateLevelUpCard(user, level, customBannerPath) {
+export async function generateLevelUpCard(user, level, customBannerPath, progressInfo = null) {
   const canvas = createCanvas(984, 282);
   const ctx = canvas.getContext("2d");
 
@@ -226,20 +228,180 @@ export async function generateLevelUpCard(user, level, customBannerPath) {
   ctx.font = `bold 30px ${fontStackBold}`;
   ctx.fillText("LEVEL", 930, 55);
 
-  // Progress Bar Line
+  // Progress Bar Line & Text
   const barWidth = 690;
   const barY = 185;
+
+  let ratio = 1.0;
+  if (progressInfo && typeof progressInfo.progressRatio === "number") {
+    ratio = Math.min(1.0, Math.max(0.05, progressInfo.progressRatio));
+  }
+  const filledBarWidth = Math.min(barWidth, Math.max(14, Math.floor(barWidth * ratio)));
+
+  // EXP Progress Text (above bar)
+  if (progressInfo && progressInfo.currentExp !== undefined && progressInfo.maxExp !== undefined) {
+    ctx.textAlign = "right";
+    ctx.fillStyle = pinkColor;
+    ctx.font = `bold 18px ${fontStackBold}`;
+    const percentText = Math.round(ratio * 100);
+    ctx.fillText(`${progressInfo.currentExp.toLocaleString()} / ${progressInfo.maxExp.toLocaleString()} EXP (${percentText}%)`, 930, 175);
+  }
+
+  // Draw background bar
   ctx.fillStyle = "rgba(255, 182, 193, 0.2)";
   drawRoundedRect(ctx, textX, barY, barWidth, 15, 7);
 
+  // Draw filled progress bar
   ctx.fillStyle = accentGradient;
-  drawRoundedRect(ctx, textX, barY, barWidth, 15, 7);
+  drawRoundedRect(ctx, textX, barY, filledBarWidth, 15, 7);
 
   // Subtext
   ctx.textAlign = "left";
   ctx.fillStyle = pinkColor;
   ctx.font = `italic 22px ${fontStack}`;
   ctx.fillText("✨ Keep active to earn more rewards!", textX, 240);
+
+  return await canvas.encode("png");
+}
+
+// สร้างภาพการ์ด Rank / Level Card ด้วย Canvas
+export async function generateRankCard(user, level, rank, customBannerPath, progressInfo = null) {
+  const canvas = createCanvas(984, 282);
+  const ctx = canvas.getContext("2d");
+
+  // 1. Banner Background
+  let loadedBg = false;
+  if (customBannerPath && fs.existsSync(customBannerPath)) {
+    try {
+      const bgImg = await loadImage(customBannerPath);
+      ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+      loadedBg = true;
+    } catch (err) {
+      console.error("⚠️ ไม่สามารถโหลดแบนเนอร์ได้:", err);
+    }
+  }
+
+  if (!loadedBg) {
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, "#1a1c29");
+    gradient.addColorStop(0.5, "#251829");
+    gradient.addColorStop(1, "#11111d");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  // Soft Dark Layer
+  const textBgGradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+  textBgGradient.addColorStop(0, "rgba(0, 0, 0, 0.7)");
+  textBgGradient.addColorStop(0.6, "rgba(0, 0, 0, 0.45)");
+  textBgGradient.addColorStop(1, "rgba(0, 0, 0, 0.55)");
+  ctx.fillStyle = textBgGradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Accent Line Bottom
+  const themeColor = "#FFB6C1";
+  const accentGradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+  accentGradient.addColorStop(0, themeColor);
+  accentGradient.addColorStop(1, "#ffffff");
+  ctx.fillStyle = accentGradient;
+  ctx.fillRect(0, canvas.height - 8, canvas.width, 8);
+
+  // 2. Circular Avatar
+  const avatarSize = 160;
+  const avatarX = 50;
+  const avatarY = (canvas.height - avatarSize) / 2;
+
+  // Avatar Shadow
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+  ctx.shadowBlur = 15;
+  ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+  ctx.beginPath();
+  ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2 + 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  try {
+    const avatarUrl = user.displayAvatarURL({ extension: "png", size: 256 });
+    const avatarImg = await loadImage(avatarUrl);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
+    ctx.restore();
+  } catch (err) {
+    console.error("⚠️ ไม่สามารถโหลด Avatar ได้:", err);
+  }
+
+  // Avatar Border Ring
+  ctx.strokeStyle = themeColor;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2 + 3, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 3. Texts
+  const textX = 240;
+  const pinkColor = "#FFB6C1";
+  const displayName = user.globalName || user.username;
+
+  // User Name
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "left";
+  ctx.font = `bold 40px ${fontStackBold}`;
+  ctx.fillText(displayName, textX, 82);
+
+  // RANK #X Badge
+  ctx.fillStyle = themeColor;
+  drawRoundedRect(ctx, textX, 102, 170, 36, 10);
+  ctx.fillStyle = "#1a1a1a";
+  ctx.font = `bold 22px ${fontStackBold}`;
+  ctx.textAlign = "center";
+  ctx.fillText(`RANK #${rank}`, textX + 85, 127);
+
+  // Level Number
+  ctx.textAlign = "right";
+  ctx.fillStyle = pinkColor;
+  ctx.font = `bold 95px ${fontStackBold}`;
+  ctx.fillText(level, 930, 138);
+  ctx.font = `bold 28px ${fontStackBold}`;
+  ctx.fillText("LEVEL", 930, 55);
+
+  // Progress Bar Line & Text
+  const barWidth = 690;
+  const barY = 185;
+
+  let ratio = 1.0;
+  if (progressInfo && typeof progressInfo.progressRatio === "number") {
+    ratio = Math.min(1.0, Math.max(0.05, progressInfo.progressRatio));
+  }
+  const filledBarWidth = Math.min(barWidth, Math.max(14, Math.floor(barWidth * ratio)));
+
+  // EXP Progress Text (above bar)
+  if (progressInfo && progressInfo.currentExp !== undefined && progressInfo.maxExp !== undefined) {
+    ctx.textAlign = "right";
+    ctx.fillStyle = pinkColor;
+    ctx.font = `bold 18px ${fontStackBold}`;
+    const percentText = Math.round(ratio * 100);
+    ctx.fillText(`${progressInfo.currentExp.toLocaleString()} / ${progressInfo.maxExp.toLocaleString()} EXP (${percentText}%)`, 930, 175);
+  }
+
+  // Draw background bar
+  ctx.fillStyle = "rgba(255, 182, 193, 0.2)";
+  drawRoundedRect(ctx, textX, barY, barWidth, 15, 7);
+
+  // Draw filled progress bar
+  ctx.fillStyle = accentGradient;
+  drawRoundedRect(ctx, textX, barY, filledBarWidth, 15, 7);
+
+  // Subtext
+  ctx.textAlign = "left";
+  ctx.fillStyle = pinkColor;
+  ctx.font = `italic 20px ${fontStack}`;
+  ctx.fillText(`🏆 Server Rank #${rank} • Keep chatting to climb the leaderboard!`, textX, 238);
 
   return await canvas.encode("png");
 }

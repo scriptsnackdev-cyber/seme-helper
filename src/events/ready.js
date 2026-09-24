@@ -10,6 +10,7 @@ export function getSlashCommandDefinitions() {
       new SlashCommandBuilder()
         .setName("set")
         .setDescription("จัดการตั้งค่าระบบต่างๆ ในเซิร์ฟเวอร์")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
         .addSubcommandGroup((group) =>
           group
             .setName("welcome")
@@ -73,6 +74,16 @@ export function getSlashCommandDefinitions() {
               sub
                 .setName("remove-image")
                 .setDescription("ลบรูปภาพหรือวิดีโอแบนเนอร์ด้านล่างออก (กลับไปใช้ภาพเริ่มต้น)")
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("remove-message")
+                .setDescription("ลบข้อความต้อนรับที่เคยตั้งไว้ (กลับไปใช้ข้อความเริ่มต้นของระบบ)")
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("remove-role")
+                .setDescription("ยกเลิกการแจกยศสมาชิกใหม่อัตโนมัติ (ลบการตั้งค่ายศออก)")
             )
         )
         .addSubcommandGroup((group) =>
@@ -295,10 +306,94 @@ export function getSlashCommandDefinitions() {
                 .setName("reset")
                 .setDescription("รีเซ็ตบอทผู้ช่วยกลับเป็นชื่อและรูปเริ่มต้นของบอท")
             )
+        )
+        .addSubcommandGroup((group) =>
+          group
+            .setName("intro")
+            .setDescription("ระบบเทมเพลตแนะนำตัวอัตโนมัติ (Sticky Intro Template)")
+            .addSubcommand((sub) =>
+              sub
+                .setName("setup")
+                .setDescription("ตั้งค่าห้องแนะนำตัว พร้อมข้อความเทมเพลตและรูปแบนเนอร์")
+                .addChannelOption((opt) =>
+                  opt
+                    .setName("channel")
+                    .setDescription("เลือกห้องสำหรับส่งเทมเพลตแนะนำตัว")
+                    .addChannelTypes(ChannelType.GuildText)
+                    .setRequired(true)
+                )
+                .addStringOption((opt) =>
+                  opt
+                    .setName("message")
+                    .setDescription("ข้อความแบบฟอร์มเทมเพลตแนะนำตัว")
+                    .setRequired(true)
+                )
+                .addAttachmentOption((opt) =>
+                  opt
+                    .setName("banner")
+                    .setDescription("รูปภาพ GIF หรือวิดีโอ MP4 แบนเนอร์ด้านล่าง (ไม่บังคับ)")
+                    .setRequired(false)
+                )
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("message")
+                .setDescription("แก้ไขข้อความเทมเพลตแนะนำตัว")
+                .addStringOption((opt) =>
+                  opt
+                    .setName("text")
+                    .setDescription("ข้อความเทมเพลตใหม่")
+                    .setRequired(true)
+                )
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("channel")
+                .setDescription("เปลี่ยนห้องสำหรับส่งเทมเพลตแนะนำตัว")
+                .addChannelOption((opt) =>
+                  opt
+                    .setName("channel")
+                    .setDescription("เลือกห้องใหม่")
+                    .addChannelTypes(ChannelType.GuildText)
+                    .setRequired(true)
+                )
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("banner")
+                .setDescription("ตั้งค่าหรือเปลี่ยนรูปภาพ/วิดีโอแบนเนอร์เทมเพลตแนะนำตัว")
+                .addAttachmentOption((opt) =>
+                  opt
+                    .setName("image")
+                    .setDescription("แนบไฟล์รูปภาพ GIF หรือวิดีโอ MP4")
+                    .setRequired(true)
+                )
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("remove-banner")
+                .setDescription("ลบรูปภาพหรือวิดีโอแบนเนอร์ของเทมเพลตแนะนำตัวออก")
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("enable")
+                .setDescription("เปิดใช้งานระบบเทมเพลตแนะนำตัว")
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("disable")
+                .setDescription("ปิดใช้งานระบบเทมเพลตแนะนำตัว")
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("status")
+                .setDescription("ดูข้อมูลการตั้งค่าระบบเทมเพลตแนะนำตัวในปัจจุบัน")
+            )
         ),
       new SlashCommandBuilder()
         .setName("giverole")
         .setDescription("มอบยศ (Role) ให้กับสมาชิกในเซิร์ฟเวอร์")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
         .addUserOption((opt) =>
           opt
             .setName("user")
@@ -314,6 +409,7 @@ export function getSlashCommandDefinitions() {
       new SlashCommandBuilder()
         .setName("quiz")
         .setDescription("จัดการระบบแบบทดสอบวัดระดับยศ (Interactive Quiz)")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
         .addSubcommand((sub) =>
           sub
             .setName("add-result")
@@ -461,6 +557,7 @@ export function getSlashCommandDefinitions() {
       new SlashCommandBuilder()
         .setName("image")
         .setDescription("จัดการคลังรูปภาพของเซิร์ฟเวอร์ (อัปโหลดแปลงเป็น WebP อัตโนมัติ)")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
         .addSubcommand((sub) =>
           sub
             .setName("add")
@@ -507,7 +604,7 @@ export function getSlashCommandDefinitions() {
         .addSubcommand((sub) =>
           sub
             .setName("delete")
-            .setDescription("ลบคลังรูปภาพตามชื่อหมวดหมู่ที่ระบุ")
+            .setDescription("ลบคลังรูปภาพทั้งหมวดหมู่ หรือลบเฉพาะรูปตามลำดับ")
             .addStringOption((opt) =>
               opt
                 .setName("title")
@@ -515,10 +612,18 @@ export function getSlashCommandDefinitions() {
                 .setRequired(true)
                 .setAutocomplete(true)
             )
+            .addIntegerOption((opt) =>
+              opt
+                .setName("index")
+                .setDescription("ลำดับรูปภาพที่ต้องการลบ (เช่น 1, 2, 3...) หากไม่ระบุจะลบทั้งหมวดหมู่")
+                .setRequired(false)
+                .setMinValue(1)
+            )
         ),
       new SlashCommandBuilder()
         .setName("helper")
         .setDescription("คำสั่งสำหรับบอทผู้ช่วยประจำเซิร์ฟเวอร์")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
         .addSubcommand((sub) =>
           sub
             .setName("talk")
@@ -536,6 +641,18 @@ export function getSlashCommandDefinitions() {
                 .setRequired(false)
             )
         ),
+      new SlashCommandBuilder()
+        .setName("rank")
+        .setDescription("ดูการ์ดเลเวล ค่า EXP และอันดับของตนเองหรือเพื่อน")
+        .addUserOption((opt) =>
+          opt
+            .setName("user")
+            .setDescription("เลือกสมาชิกที่ต้องการดู (หากไม่ระบุจะดูของตนเอง)")
+            .setRequired(false)
+        ),
+      new SlashCommandBuilder()
+        .setName("leaderboard")
+        .setDescription("ดูตาราง 10 อันดับสมาชิกที่มีเลเวลสูงสุดในเซิร์ฟเวอร์"),
   ].map((cmd) => cmd.toJSON());
 }
 

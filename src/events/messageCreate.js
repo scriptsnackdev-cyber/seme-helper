@@ -3,13 +3,17 @@ import {
   getLevelingSettings,
   getLevelingUserData,
   saveLevelingUserData,
+  saveLevelingUserDataThrottled,
   getGlobalLevelingConfig,
   getLevelingBannerPath,
+  getIntroSettings,
 } from "../utils/db.js";
 import { generateLevelUpCard } from "../utils/canvas.js";
 import { sendHelperMessage } from "../utils/helper.js";
+import { postIntroStickyMessage } from "../commands/set/setIntro.js";
 
 const userCooldowns = new Map();
+const processingIntroChannels = new Set();
 
 // ทำความสะอาด Map คูลดาวน์เมื่อสะสมข้อมูลเกิน 1,000 รายการ
 function cleanupUserCooldowns() {
@@ -23,6 +27,26 @@ function cleanupUserCooldowns() {
   }
 }
 
+async function handleIntroSticky(message, guildId) {
+  const introSettings = getIntroSettings(guildId);
+  if (!introSettings || !introSettings.enabled || introSettings.channelId !== message.channel.id || !introSettings.message) {
+    return;
+  }
+
+  if (processingIntroChannels.has(message.channel.id)) return;
+  processingIntroChannels.add(message.channel.id);
+
+  try {
+    // หน่วงเวลาเล็กน้อย (350ms) เพื่อให้ข้อความของสมาชิกถูกจัดลำดับลงห้องอย่างสมบูรณ์
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    await postIntroStickyMessage(message.guild, introSettings);
+  } catch (err) {
+    console.error("❌ [Intro Sticky] ข้อผิดพลาดในการส่งเทมเพลต:", err);
+  } finally {
+    processingIntroChannels.delete(message.channel.id);
+  }
+}
+
 export function setupMessageCreateEvent(client) {
   client.on("messageCreate", async (message) => {
     if (!message.guild || message.author.bot) return;
@@ -30,6 +54,10 @@ export function setupMessageCreateEvent(client) {
     const guildId = message.guild.id;
     const userId = message.author.id;
 
+    // 1. ตรวจสอบและส่งข้อความ Sticky Template แนะนำตัว
+    await handleIntroSticky(message, guildId);
+
+    // 2. ระบบสะสมแต้ม Leveling
     const levelingSettings = getLevelingSettings(guildId);
     if (!levelingSettings || !levelingSettings.enabled) return;
 
@@ -78,9 +106,22 @@ export function setupMessageCreateEvent(client) {
 
       console.log(`🎉 [Level Up Log] ${message.author.tag} อัปเวลเป็น Level ${newLevel}! (พิมพ์สะสมทั้งหมด ${userData[userId].chars} อักขระ)`);
 
+      // คำนวณสัดส่วน Progress สำหรับวาดบนการ์ด
+      const currentLevelExp = globalConfig[newLevel] || globalConfig[String(newLevel)] || 0;
+      const nextLevelExp = globalConfig[newLevel + 1] || globalConfig[String(newLevel + 1)] || Math.floor(100 * Math.pow(newLevel + 1, 1.85));
+      const expRange = Math.max(1, nextLevelExp - currentLevelExp);
+      const currentExpProgress = Math.max(0, userData[userId].chars - currentLevelExp);
+      const progressRatio = Math.min(1.0, currentExpProgress / expRange);
+
+      const progressInfo = {
+        currentExp: userData[userId].chars,
+        maxExp: nextLevelExp,
+        progressRatio: Math.max(0.1, progressRatio),
+      };
+
       try {
         const customBannerPath = getLevelingBannerPath(guildId);
-        const cardBuffer = await generateLevelUpCard(message.author, newLevel, customBannerPath);
+        const cardBuffer = await generateLevelUpCard(message.author, newLevel, customBannerPath, progressInfo);
         const attachment = new AttachmentBuilder(cardBuffer, { name: "levelup.png" });
 
         await sendHelperMessage(targetChannel, {
@@ -94,7 +135,8 @@ export function setupMessageCreateEvent(client) {
         }, guildId);
       }
     } else {
-      saveLevelingUserData(guildId, userData);
+      // บันทึกแบบ Throttled ทุก 3-5 วินาที เพื่อไม่ให้บล็อก Node.js Event Loop
+      saveLevelingUserDataThrottled(guildId, userData);
     }
   });
 }

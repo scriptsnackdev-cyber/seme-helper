@@ -1,4 +1,5 @@
-import { getHelperSettings } from "./db.js";
+import fs from "fs";
+import { getHelperSettings, getHelperAvatarPath } from "./db.js";
 
 /**
  * ส่งข้อความไปยังห้องเป้าหมายด้วยตัวตนของ Helper ประจำเซิร์ฟเวอร์ (ผ่าน Webhook)
@@ -42,21 +43,39 @@ export async function sendHelperMessage(channel, payload, guildId = null) {
       webhook = webhooks.find((w) => w.owner?.id === channel.client.user.id);
     }
 
+    const localAvatar = getHelperAvatarPath(targetGuildId);
+    let avatarBuffer = null;
+    if (localAvatar && fs.existsSync(localAvatar)) {
+      try {
+        avatarBuffer = fs.readFileSync(localAvatar);
+      } catch (e) {}
+    }
+
     // ถ้ายังไม่มี Webhook ในห้องนี้ ให้สร้างขึ้นใหม่
     if (!webhook) {
       webhook = await channel.createWebhook({
         name: helperConfig.name,
-        avatar: helperConfig.avatar || undefined,
+        avatar: avatarBuffer || helperConfig.avatar || undefined,
         reason: "Seme Helper Persona Webhook",
       });
+    } else if (webhook.name !== helperConfig.name || avatarBuffer) {
+      // ถ้ามี Webhook อยู่แล้ว แต่อาจจะมีการเปลี่ยนชื่อหรืออัปโหลดรูปภาพใหม่
+      await webhook.edit({
+        name: helperConfig.name,
+        avatar: avatarBuffer || helperConfig.avatar || undefined,
+      }).catch(() => null);
     }
 
-    // ส่งข้อความผ่าน Webhook พร้อมกำหนด username และ avatarURL
+    // ส่งข้อความผ่าน Webhook พร้อมกำหนด username
     const webhookPayload = {
       ...payload,
       username: helperConfig.name,
-      avatarURL: helperConfig.avatar || undefined,
     };
+
+    // avatarURL ใน send() รับเฉพาะ URL (http/https) ที่ยังไม่หมดอายุเท่านั้น
+    if (helperConfig.avatar && helperConfig.avatar.startsWith("http")) {
+      webhookPayload.avatarURL = helperConfig.avatar;
+    }
 
     return await webhook.send(webhookPayload);
   } catch (err) {

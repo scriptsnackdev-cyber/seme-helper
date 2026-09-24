@@ -38,7 +38,8 @@ export async function handleSetWelcomeCommands(interaction) {
     const bannerAttachment = interaction.options.getAttachment("image");
     const bannerGifPath = path.join(DATABASE_DIR, guildId, "welcome", "banner.gif");
     const bannerWebpPath = path.join(DATABASE_DIR, guildId, "welcome", "banner.webp");
-    const tempVideoPath = path.join(DATABASE_DIR, guildId, "welcome", "temp_input.mp4");
+    const randomSuffix = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const tempVideoPath = path.join(DATABASE_DIR, guildId, "welcome", `temp_${randomSuffix}.mp4`);
 
     if (fs.existsSync(bannerGifPath)) fs.unlinkSync(bannerGifPath);
     if (fs.existsSync(bannerWebpPath)) fs.unlinkSync(bannerWebpPath);
@@ -66,6 +67,24 @@ export async function handleSetWelcomeCommands(interaction) {
       await interaction.reply({ content: "✅ รีเซ็ตกลับไปใช้แบนเนอร์เริ่มต้นเรียบร้อยแล้ว", ephemeral: true });
     } else {
       await interaction.reply({ content: "⚠️ คุณใช้แบนเนอร์เริ่มต้นอยู่แล้วค่ะ", ephemeral: true });
+    }
+  } else if (subcommand === "remove-message" || subcommand === "reset-message") {
+    if (welcomeSettings.message) {
+      delete welcomeSettings.message;
+      saveWelcomeSettings(guildId, welcomeSettings);
+      await interaction.reply({ content: "✅ รีเซ็ตข้อความต้อนรับกลับเป็นข้อความเริ่มต้นของระบบเรียบร้อยแล้วค่ะ", ephemeral: true });
+    } else {
+      await interaction.reply({ content: "⚠️ ปัจจุบันใช้งานข้อความต้อนรับเริ่มต้นของระบบอยู่แล้วค่ะ", ephemeral: true });
+    }
+  } else if (subcommand === "remove-role" || subcommand === "reset-role") {
+    if (welcomeSettings.roleId) {
+      const oldRoleName = welcomeSettings.roleName || "ยศที่ตั้งไว้";
+      delete welcomeSettings.roleId;
+      delete welcomeSettings.roleName;
+      saveWelcomeSettings(guildId, welcomeSettings);
+      await interaction.reply({ content: `✅ ยกเลิกการแจกยศสมาชิกใหม่อัตโนมัติ (${oldRoleName}) เรียบร้อยแล้วค่ะ`, ephemeral: true });
+    } else {
+      await interaction.reply({ content: "⚠️ ยังไม่ได้มีการตั้งค่ายศสมาชิกใหม่อัตโนมัติไว้ค่ะ", ephemeral: true });
     }
   }
 }

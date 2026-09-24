@@ -57,7 +57,8 @@ export async function handleQuizCommand(interaction) {
       const encId = encodeURIComponent(title);
       const gifPath = path.join(DATABASE_DIR, guildId, "quiz", "results", `${encId}.gif`);
       const webpPath = path.join(DATABASE_DIR, guildId, "quiz", "results", `${encId}.webp`);
-      const tempVideoPath = path.join(DATABASE_DIR, guildId, "quiz", "results", `temp_${encId}.mp4`);
+      const randomSuffix = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const tempVideoPath = path.join(DATABASE_DIR, guildId, "quiz", "results", `temp_${encId}_${randomSuffix}.mp4`);
 
       if (fs.existsSync(gifPath)) fs.unlinkSync(gifPath);
       if (fs.existsSync(webpPath)) fs.unlinkSync(webpPath);
@@ -127,7 +128,8 @@ export async function handleQuizCommand(interaction) {
     if (bannerAttachment) {
       const gifPath = path.join(DATABASE_DIR, guildId, "quiz", "header_banner.gif");
       const webpPath = path.join(DATABASE_DIR, guildId, "quiz", "header_banner.webp");
-      const tempVideoPath = path.join(DATABASE_DIR, guildId, "quiz", "temp_header.mp4");
+      const randomSuffix = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const tempVideoPath = path.join(DATABASE_DIR, guildId, "quiz", `temp_header_${randomSuffix}.mp4`);
 
       if (fs.existsSync(gifPath)) fs.unlinkSync(gifPath);
       if (fs.existsSync(webpPath)) fs.unlinkSync(webpPath);
