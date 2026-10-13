@@ -8,7 +8,7 @@ import {
   getIntroBannerPath,
 } from "../../utils/db.js";
 import { convertMp4ToGif, downloadAndConvertToGif } from "../../utils/canvas.js";
-import { sendHelperMessage, respondToInteraction, deferCommand, errorSummary } from "../../utils/helper.js";
+import { sendHelperMessage, deleteHelperMessage, respondToInteraction, deferCommand, errorSummary } from "../../utils/helper.js";
 
 /**
  * ส่งข้อความ Sticky Template ไปยังห้องแนะนำตัว พร้อมลบข้อความเดิมออก
@@ -28,10 +28,11 @@ export async function postIntroStickyMessage(guild, introSettings) {
     try {
       const oldMsg = await channel.messages.fetch(introSettings.lastMessageId).catch(() => null);
       if (oldMsg) {
-        await oldMsg.delete().catch(() => null);
+        await deleteHelperMessage(oldMsg);
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      console.warn("ลบ Sticky เดิมไม่สำเร็จ:", errorSummary(error));
+      return null;
     }
   }
 

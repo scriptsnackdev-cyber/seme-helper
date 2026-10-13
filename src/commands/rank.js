@@ -1,4 +1,4 @@
-import { respondToInteraction, deferCommand, errorSummary } from "../utils/helper.js";
+import { respondToInteraction, deferCommand, errorSummary, publishHelperResult } from "../utils/helper.js";
 import { MessageFlags, AttachmentBuilder, EmbedBuilder } from "discord.js";
 import {
   getLevelingSettings,
@@ -9,13 +9,13 @@ import {
 import { generateRankCard } from "../utils/canvas.js";
 
 export async function handleRankCommand(interaction) {
-  const { guild, guildId } = interaction;
+  const { guildId } = interaction;
   if (!guildId) {
     await respondToInteraction(interaction, { content: "❌ คำสั่งนี้ใช้ได้เฉพาะในเซิร์ฟเวอร์เท่านั้น", flags: MessageFlags.Ephemeral });
     return;
   }
 
-  await deferCommand(interaction, false);
+  await deferCommand(interaction);
 
   const targetUser = interaction.options.getUser("user") || interaction.user;
   const levelingSettings = getLevelingSettings(guildId);
@@ -50,26 +50,22 @@ export async function handleRankCommand(interaction) {
     progressRatio: Math.max(0.05, progressRatio),
   };
 
+  let payload;
   try {
     const bannerPath = getLevelingBannerPath(guildId);
     const cardBuffer = await generateRankCard(targetUser, targetLevel, rankNumber, bannerPath, progressInfo);
-    const attachment = new AttachmentBuilder(cardBuffer, { name: `rank_${targetUser.id}.png` });
-
-    let replyNotice = "";
-    if (levelingSettings && !levelingSettings.enabled) {
-      replyNotice = "*หมายเหตุ: ระบบสะสมเลเวลในเซิร์ฟเวอร์นี้กำลังปิดใช้งานอยู่ค่ะ*\n";
-    }
-
-    await respondToInteraction(interaction, {
-      content: replyNotice || undefined,
+    const attachment = new AttachmentBuilder(cardBuffer, { name: "rank_" + targetUser.id + ".png" });
+    payload = {
+      content: levelingSettings && !levelingSettings.enabled ? "หมายเหตุ: ระบบสะสมเลเวลในเซิร์ฟเวอร์นี้กำลังปิดใช้งานอยู่ค่ะ" : undefined,
       files: [attachment],
-    });
-  } catch (err) {
-    console.error("❌ เกิดข้อผิดพลาดในการสร้าง Rank Card:", errorSummary(err));
-    await respondToInteraction(interaction, {
-      content: `📊 **ข้อมูลเลเวลของ ${targetUser.username}**\n- **อันดับในเซิร์ฟเวอร์:** #${rankNumber}\n- **เลเวล:** Level ${targetLevel}\n- **EXP สะสม:** ${targetChars.toLocaleString()} / ${nextLevelExp.toLocaleString()} EXP`,
-    });
+    };
+  } catch (error) {
+    console.warn("สร้าง Rank Card ไม่สำเร็จ ใช้ข้อมูลข้อความ:", errorSummary(error));
+    payload = {
+      content: "ข้อมูลเลเวลของ " + targetUser.username + "\nอันดับ #" + rankNumber + " | Level " + targetLevel + " | EXP " + targetChars.toLocaleString() + " / " + nextLevelExp.toLocaleString(),
+    };
   }
+  await publishHelperResult(interaction, payload);
 }
 
 export async function handleLeaderboardCommand(interaction) {
@@ -79,6 +75,7 @@ export async function handleLeaderboardCommand(interaction) {
     return;
   }
 
+  await deferCommand(interaction);
   const userData = getLevelingUserData(guildId);
   const users = Object.entries(userData).map(([id, data]) => ({
     userId: id,
@@ -122,5 +119,5 @@ export async function handleLeaderboardCommand(interaction) {
     })
     .setTimestamp();
 
-  await respondToInteraction(interaction, { embeds: [embed] });
+  await publishHelperResult(interaction, { embeds: [embed] });
 }

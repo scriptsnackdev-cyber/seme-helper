@@ -1,7 +1,7 @@
 import { EmbedBuilder, PermissionFlagsBits, parseEmoji } from "discord.js";
 import { getReactionRoleSettings, saveReactionRoleSettings } from "../../utils/db.js";
 import { assertRoleManageable, hasStaffPermission } from "../../utils/permission.js";
-import { deferCommand, respondToInteraction, errorSummary, getReactionEmojiKey } from "../../utils/helper.js";
+import { deferCommand, respondToInteraction, errorSummary, getReactionEmojiKey, sendHelperMessage, editHelperMessage, deleteHelperMessage } from "../../utils/helper.js";
 
 const unicodeEmoji = /^(?:[0-9#*]\uFE0F?\u20E3|\p{Regional_Indicator}{2}|\p{Extended_Pictographic}[\uFE0E\uFE0F]?\p{Emoji_Modifier}?(?:[\u{E0020}-\u{E007E}]+\u{E007F})?(?:\u200D\p{Extended_Pictographic}[\uFE0E\uFE0F]?\p{Emoji_Modifier}?)*)$/u;
 
@@ -91,19 +91,18 @@ export async function handleSetReactionRoleCommands(interaction) {
       .setTitle(title)
       .setDescription([
         ...(description ? [description] : []),
-        "กดอิโมจิเพื่อรับยศ เลือกได้หลายยศ กดเอาอิโมจิออกเพื่อถอดเฉพาะยศนั้น ใช้ reaction ปกติ",
         lines.join("\n"),
       ].join("\n\n"))
       .setColor(0xf3e4f5);
 
-    message = await channel.send({ content: "กำลังเตรียมตัวเลือกยศ กรุณารอสักครู่", allowedMentions: { parse: [] } });
+    message = await sendHelperMessage(channel, { content: "กำลังเตรียมตัวเลือกยศ กรุณารอสักครู่", allowedMentions: { parse: [] } }, guild.id);
     for (const reaction of reactions) await message.react(reaction);
     saveReactionRoleSettings(guild.id, {
       ...getReactionRoleSettings(guild.id),
       [message.id]: { channelId: channel.id, entries },
     });
     saved = true;
-    await message.edit({ content: null, embeds: [embed], allowedMentions: { parse: [] } });
+    await editHelperMessage(message, { content: null, embeds: [embed], allowedMentions: { parse: [] } });
   } catch (error) {
     console.warn("สร้าง Reaction Roles ไม่สำเร็จ:", errorSummary(error));
     let cleanupNotice = "";
@@ -118,7 +117,7 @@ export async function handleSetReactionRoleCommands(interaction) {
       }
     }
     if (message) {
-      try { await message.delete(); }
+      try { await deleteHelperMessage(message); }
       catch (cleanupError) {
         console.warn("ลบข้อความ Reaction Roles ที่สร้างไม่สำเร็จไม่ได้:", errorSummary(cleanupError));
         cleanupNotice += ` กรุณาลบข้อความที่สร้างไม่สมบูรณ์: ${message.url}`;

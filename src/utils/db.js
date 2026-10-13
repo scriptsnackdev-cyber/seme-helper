@@ -41,6 +41,7 @@ export function ensureGuildDatabase(guildId) {
   const levelingDir = path.join(guildDir, "leveling");
   const giveroleDir = path.join(guildDir, "giverole");
   const introDir = path.join(guildDir, "intro");
+  const jailDir = path.join(guildDir, "jail");
 
   if (!fs.existsSync(welcomeDir)) fs.mkdirSync(welcomeDir, { recursive: true });
   if (!fs.existsSync(memberDir)) fs.mkdirSync(memberDir, { recursive: true });
@@ -50,6 +51,7 @@ export function ensureGuildDatabase(guildId) {
   if (!fs.existsSync(levelingDir)) fs.mkdirSync(levelingDir, { recursive: true });
   if (!fs.existsSync(giveroleDir)) fs.mkdirSync(giveroleDir, { recursive: true });
   if (!fs.existsSync(introDir)) fs.mkdirSync(introDir, { recursive: true });
+  if (!fs.existsSync(jailDir)) fs.mkdirSync(jailDir, { recursive: true });
 }
 
 // ==================== DOMAIN HELPERS ==================== //
@@ -352,5 +354,56 @@ export function saveReactionRoleSettings(guildId, settings) {
     if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
   }
   reactionRoleSettings.set(guildId, settings);
+}
+
+// ==================== JAIL HELPERS ==================== //
+
+export function getJailSettings(guildId) {
+  ensureGuildDatabase(guildId);
+  const filePath = path.join(DATABASE_DIR, guildId, "jail", "setting.json");
+  return readJson(filePath, { roleId: null, roleName: null });
+}
+
+export function saveJailSettings(guildId, settings) {
+  ensureGuildDatabase(guildId);
+  const filePath = path.join(DATABASE_DIR, guildId, "jail", "setting.json");
+  writeJson(filePath, settings);
+}
+
+export function getJailRecords(guildId) {
+  ensureGuildDatabase(guildId);
+  const filePath = path.join(DATABASE_DIR, guildId, "jail", "records.json");
+  return readJson(filePath, {});
+}
+
+export function saveJailRecords(guildId, records) {
+  ensureGuildDatabase(guildId);
+  const filePath = path.join(DATABASE_DIR, guildId, "jail", "records.json");
+  const temporaryPath = `${filePath}.tmp`;
+  try {
+    writeJson(temporaryPath, records);
+    fs.renameSync(temporaryPath, filePath);
+  } finally {
+    if (fs.existsSync(temporaryPath)) {
+      try {
+        fs.unlinkSync(temporaryPath);
+      } catch {}
+    }
+  }
+}
+
+export function getAllGuildsWithActiveJails() {
+  if (!fs.existsSync(DATABASE_DIR)) return [];
+  const entries = fs.readdirSync(DATABASE_DIR, { withFileTypes: true });
+  const result = [];
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const recordsPath = path.join(DATABASE_DIR, entry.name, "jail", "records.json");
+      if (fs.existsSync(recordsPath)) {
+        result.push(entry.name);
+      }
+    }
+  }
+  return result;
 }
 

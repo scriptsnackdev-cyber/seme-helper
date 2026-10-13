@@ -1,3 +1,56 @@
+# แผนใช้ Helper Webhook สำหรับข้อความสาธารณะทั้งหมด
+
+สถานะ: ผู้ใช้อนุมัติแล้ว ดำเนินการเสร็จและตรวจผ่าน ดู walkthrough.md
+
+## ผลจากการตรวจ
+- ใช้ sendHelperMessage แล้ว: welcome, level-up, intro sticky, helper talk, ข้อความปุ่มรับยศ, ข้อความเปิดฟอร์ม, Quiz setup และประกาศผลตรวจสมาชิก
+- ยังใช้ channel.send โดยตรง: Reaction Roles และคำตอบฟอร์มที่ส่งเข้าห้องทีมงาน
+- ยังส่งผลสาธารณะผ่าน interaction ในนามแอป: giverole, rank, leaderboard, image view รวมถึง image follow-up batches
+- sendHelperMessage เดิมเปลี่ยนไปส่งในนามบอทเมื่อขาด Manage Webhooks หรือ Webhook ล้มเหลวบางประเภท จึงไม่รักษาชื่อ Helper ตลอดเมื่อเปิดใช้งาน
+- การแก้/ลบข้อความ Webhook ต้องใช้ Webhook editMessage/deleteMessage โดยเฉพาะ Reaction Roles, ผลอนุมัติฟอร์ม และ Sticky จึงต้องปรับพร้อมการส่ง
+
+## พฤติกรรมที่จะได้
+- เมื่อเปิด Helper และตั้งชื่อแล้ว ข้อความสาธารณะทั้งหมดใช้ชื่อและรูป Helper ล่าสุดจาก /set helper setup ในเซิร์ฟเวอร์นั้น
+- หาก Helper เปิดอยู่แต่ส่ง Webhook ไม่ได้ ให้แจ้งปัญหาตรงจริง ไม่เปลี่ยนไปใช้ชื่อบอทเงียบ ๆ
+- หากยังไม่ได้เปิด Helper หรือผู้ใช้ reset Helper ให้ใช้ตัวบอทตามเดิม
+- คำตอบส่วนตัว เช่น Success, error, status และ Quiz ส่วนตัว ยังคงเป็น interaction ของแอป เนื่องจาก Discord ไม่รองรับการเปลี่ยน username/avatar สำหรับ interaction responses/followups และ Incoming Webhook ไม่ใช้แทนข้อความส่วนตัวได้
+- ผลสาธารณะของคำสั่งส่งผ่าน Helper ในห้อง ส่วนคำตอบรับและ Success ส่งส่วนตัวให้ผู้สั่ง เพื่อไม่เกิด failed ทั้งที่โพสต์สำเร็จ
+
+## ไฟล์และการแก้
+1. src/utils/helper.js: รวมการหา/สร้าง Helper Webhook ของช่องไว้ที่เดียว ใช้ชื่อและรูปตาม config เสมอ แยกการเลือกใช้ตัวบอทเฉพาะกรณี Helper ไม่เปิดออกจากข้อผิดพลาด Webhook ลดการ fetch/edit ซ้ำด้วย cache ในหน่วยความจำ และไม่ log/persist webhook token
+2. Helper เดิมรองรับ thread ผ่าน Webhook ของห้องแม่และ threadId ตรวจสิทธิ์และรูปแบบช่องให้ตรงจริง เมื่อ cache ชี้ไปที่ Webhook ที่ถูกลบให้ล้าง cache ไม่ส่งซ้ำเมื่อผลส่งไม่แน่นอน
+3. เพิ่ม editHelperMessage/deleteHelperMessage ในไฟล์ helper เดิม: ข้อความของบอทใช้ native edit/delete ส่วนข้อความ Webhook ใช้ token ของ Webhook เจ้าของ message ID นั้น ตรวจว่าเป็น Webhook ของบอท ไม่ใช้ชื่อปัจจุบันเป็นตัวหา เพื่อรองรับข้อความเก่าและการเปลี่ยนชื่อ Helper
+4. src/commands/set/setReactionRole.js: เปลี่ยนข้อความเตรียม/เผยแพร่เป็น sendHelperMessage และใช้ helper edit/delete สำหรับข้อความพร้อมรายการและ cleanup คงระบบ reaction add/remove และ config ตาม message ID
+5. src/events/interactionCreate.js: ส่งคำตอบฟอร์มไปห้องทีมงานผ่าน Helper และใช้ editHelperMessage ตอนบันทึกผลอนุมัติ/ปฏิเสธ ทั้งข้อความใหม่จาก Webhook และข้อความเก่าจากบอท
+6. ใน interactionCreate: defer Slash commands แบบส่วนตัวก่อนทำงาน สำหรับผลสาธารณะให้ handler ส่งออกห้องแล้วตอบ Success ส่วนตัว คง modal/autocomplete และ Quiz ส่วนตัวตามเดิม
+7. src/commands/giverole.js: ส่งประกาศและการ์ดผ่าน Helper แจ้ง Success การแจกยศตามจริง หากแจกแล้วแต่โพสต์ประกาศล้มเหลวให้บอกสองผลนี้แยกกัน ไม่แจกยศหรือส่งประกาศซ้ำ
+8. src/commands/rank.js: ส่ง rank card และ leaderboard ผ่าน Helper แยกการสร้างการ์ดจากการส่ง ป้องกันการส่ง fallback text ซ้ำเพียงเพราะเครือข่ายส่งรูปตอบผิดพลาด ยืนยันผลให้ผู้สั่งส่วนตัว
+9. src/commands/image.js: ส่ง image view ทุก batch ผ่าน Helper ไม่ใช้ interaction follow-up สำหรับรูปสาธารณะ ตอบผลจำนวนที่ส่งสำเร็จส่วนตัว และรายงานสำเร็จบางส่วนเมื่อ batch หลังล้มเหลว โดยไม่ส่ง batch ก่อนซ้ำ คงคำสั่ง add/list/delete ส่วนตัว
+10. src/commands/set/setIntro.js: ใช้ deleteHelperMessage สำหรับ Sticky เก่า คงการส่งผ่าน Helper และให้รายงานการลบไม่สำเร็จตามจริง
+11. src/events/messageCreate.js: แยกการสร้างการ์ด level-up ออกจากการส่ง ให้ใช้ข้อความล้วนเฉพาะเมื่อสร้างการ์ดไม่ได้ ไม่ลองส่งซ้ำเมื่อการส่งเดิมมีผลไม่แน่นอน
+12. อัปเดต walkthrough.md ด้วยผล audit วิธีใช้ สิทธิ์ Manage Webhooks และผลตรวจ ไม่สร้างไฟล์โค้ดใหม่หรือเพิ่ม dependency
+
+## ตรวจสอบ
+- ตรวจ syntax และ static module linking ทั้งโปรเจกต์ พร้อม git diff --check
+- ตรวจทุก channel.send/reply/followUp ว่าสาธารณะผ่าน Helper และส่วนตัวไม่ถูกเปิดเผย
+- Mock หลายเซิร์ฟเวอร์/หลายห้อง ชื่อและรูปเปลี่ยน Helper ปิด/เปิด Webhook ถูกลบ สิทธิ์ไม่พอ และ thread ในหน่วยความจำ
+- Mock การแก้/ลบข้อความ Webhook ด้วย owner ID และ token ใน memory รวมถึงข้อความบอทเดิม โดยไม่ log token หรือส่ง payload ลับ
+- Mock Reaction Roles, ฟอร์มอนุมัติ, Sticky, giverole, rank/leaderboard, image batches และ level-up ให้สำเร็จ/ล้มเหลวตรงจริง และไม่โพสต์ซ้ำเมื่อยืนยันผลหรือส่งเดิมมีปัญหา
+- ไม่รันบอทหรือ dev server ไม่ deploy/restart PM2 ไม่เรียก Discord API หรืออ่าน/เขียน database จริง และไม่อ้างว่าผ่าน lint/tsc ที่ไม่มี script/config
+
+---
+
+# แผนลบคำแนะนำอัตโนมัติในข้อความเลือกยศ
+
+สถานะ: ผู้ใช้อนุมัติแล้ว ลบประโยคและตรวจผ่าน
+
+- แก้ `src/commands/set/setReactionRole.js` ลบประโยค “กดอิโมจิเพื่อรับยศ เลือกได้หลายยศ กดเอาอิโมจิออกเพื่อถอดเฉพาะยศนั้น ใช้ reaction ปกติ” ออกจาก embed description
+- คงหัวข้อ คำอธิบายที่ผู้ใช้กรอก และรายการอิโมจิ–ยศ รวมถึงการเพิ่ม/ถอดยศเดิม
+- ตรวจ syntax ของไฟล์และ git diff --check แล้วบันทึกผลใน walkthrough.md
+- มีผลกับข้อความที่สร้างใหม่ ข้อความเดิมใน Discord ต้องแก้ผ่านการเรียก API จริง ซึ่งไม่ได้ทำจาก workspace นี้
+
+---
+
 # แผนเพิ่ม Reaction Roles แบบเลือกหลายยศ
 
 สถานะ: ผู้ใช้อนุมัติแล้ว ดำเนินการเสร็จและตรวจผ่าน ดู walkthrough.md

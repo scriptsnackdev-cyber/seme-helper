@@ -1,4 +1,4 @@
-import { respondToInteraction, deferCommand, errorSummary } from "../utils/helper.js";
+import { respondToInteraction, deferCommand, errorSummary, sendHelperMessage } from "../utils/helper.js";
 import { MessageFlags, PermissionFlagsBits, AttachmentBuilder } from "discord.js";
 import { getGiveRoleBannerPath } from "../utils/db.js";
 import { generateGiveRoleCard } from "../utils/canvas.js";
@@ -11,7 +11,7 @@ export async function handleGiveRoleCommand(interaction) {
     return;
   }
 
-  await deferCommand(interaction, false);
+  await deferCommand(interaction);
 
   // 1. ตรวจสอบสิทธิ์ผู้สั่ง (ต้องมีสิทธิ์ Manage Roles หรือ Admin หรือยศสูงกว่าบอท)
   const hasPerm = await hasStaffPermission(interaction, PermissionFlagsBits.ManageRoles);
@@ -64,8 +64,18 @@ export async function handleGiveRoleCommand(interaction) {
   } catch (error) {
     console.warn("มอบยศสำเร็จ แต่สร้างการ์ดไม่สำเร็จ:", errorSummary(error));
   }
-  await respondToInteraction(interaction, {
-    content: successContent + (attachment ? "" : " (สร้างการ์ดไม่สำเร็จ)"),
-    ...(attachment ? { files: [attachment] } : {}),
-  });
+  try {
+    const message = await sendHelperMessage(interaction.channel, {
+      content: successContent + (attachment ? "" : " (สร้างการ์ดไม่สำเร็จ)"),
+      ...(attachment ? { files: [attachment] } : {}),
+    }, guildId);
+    await respondToInteraction(interaction, { content: successContent + " " + message.url });
+  } catch (error) {
+    console.warn("มอบยศสำเร็จ แต่ส่งประกาศไม่สำเร็จ:", errorSummary(error));
+    await respondToInteraction(interaction, {
+      content: successContent + " แต่การส่งประกาศมีปัญหา: " + (error.code
+        ? "กรุณาตรวจสิทธิ์ Helper Webhook (รหัส " + error.code + ")"
+        : error.message),
+    });
+  }
 }

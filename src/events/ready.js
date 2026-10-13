@@ -1,6 +1,7 @@
 import { errorSummary } from "../utils/helper.js";
 import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits, ChannelType } from "discord.js";
 import { logServerCount, getGlobalLevelingConfig } from "../utils/db.js";
+import { startJailCheckInterval } from "../commands/jail.js";
 
 export function getSlashCommandDefinitions() {
   return [
@@ -411,6 +412,37 @@ export function getSlashCommandDefinitions() {
               }
               return sub;
             })
+        )
+        .addSubcommandGroup((group) =>
+          group
+            .setName("jail")
+            .setDescription("ระบบคุกและจำกัดสิทธิ์สมาชิกชั่วคราว (Jail)")
+            .addSubcommand((sub) =>
+              sub
+                .setName("role")
+                .setDescription("ตั้งค่ายศสำหรับคุมขัง (Jail Role)")
+                .addRoleOption((opt) =>
+                  opt
+                    .setName("role")
+                    .setDescription("เลือกยศสำหรับห้องขัง")
+                    .setRequired(true)
+                )
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("status")
+                .setDescription("ดูข้อมูลการตั้งค่ายศคุกและรายชื่อผู้ที่ถูกคุมขังอยู่ในปัจจุบัน")
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("remove-role")
+                .setDescription("ลบการตั้งค่ายศห้องขังออก")
+            )
+            .addSubcommand((sub) =>
+              sub
+                .setName("initial-role")
+                .setDescription("สร้างยศห้องขังใหม่อัตโนมัติ (ปิดสิทธิ์ทั้งหมด) และบันทึกเป็น Jail Role")
+            )
         ),
       new SlashCommandBuilder()
         .setName("giverole")
@@ -675,6 +707,50 @@ export function getSlashCommandDefinitions() {
       new SlashCommandBuilder()
         .setName("leaderboard")
         .setDescription("ดูตาราง 10 อันดับสมาชิกที่มีเลเวลสูงสุดในเซิร์ฟเวอร์"),
+
+      new SlashCommandBuilder()
+        .setName("jail")
+        .setDescription("ส่งสมาชิกเข้าห้องขังชั่วคราวและถอดยศเดิมทั้งหมด")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+        .addUserOption((opt) =>
+          opt
+            .setName("user")
+            .setDescription("สมาชิกที่ต้องการส่งเข้าคุก")
+            .setRequired(true)
+        )
+        .addIntegerOption((opt) =>
+          opt
+            .setName("time")
+            .setDescription("ระยะเวลาคุมขัง (หน่วยเป็นนาที)")
+            .setRequired(true)
+            .setMinValue(1)
+            .setMaxValue(43200)
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("reason")
+            .setDescription("เหตุผลในการคุมขัง (ไม่บังคับ)")
+            .setMaxLength(500)
+            .setRequired(false)
+        ),
+
+      new SlashCommandBuilder()
+        .setName("unjail")
+        .setDescription("ปลดสมาชิกออกจากห้องขังก่อนกำหนดและคืนยศเดิม")
+        .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+        .addUserOption((opt) =>
+          opt
+            .setName("user")
+            .setDescription("สมาชิกที่ต้องการปลดออกจากคุก")
+            .setRequired(true)
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("reason")
+            .setDescription("เหตุผลในการปลด (ไม่บังคับ)")
+            .setMaxLength(500)
+            .setRequired(false)
+        ),
   ].map((cmd) => cmd.toJSON());
 }
 
@@ -693,6 +769,9 @@ export function setupReadyEvent(client, token, clientId) {
 
     // สร้าง/โหลด leveling.json
     getGlobalLevelingConfig();
+
+    // เริ่มต้นระบบตรวจสอบห้องขังอัตโนมัติ (รอบละ 1 นาที)
+    startJailCheckInterval(client);
 
     // สร้างคำสั่ง Slash Commands
     const commands = getSlashCommandDefinitions();

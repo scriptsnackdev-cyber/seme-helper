@@ -119,20 +119,21 @@ export function setupMessageCreateEvent(client) {
         progressRatio: Math.max(0.1, progressRatio),
       };
 
+      let attachment;
       try {
         const customBannerPath = getLevelingBannerPath(guildId);
         const cardBuffer = await generateLevelUpCard(message.author, newLevel, customBannerPath, progressInfo);
-        const attachment = new AttachmentBuilder(cardBuffer, { name: "levelup.png" });
-
+        attachment = new AttachmentBuilder(cardBuffer, { name: "levelup.png" });
+      } catch (error) {
+        console.warn("สร้างการ์ด Level Up ไม่สำเร็จ ใช้ข้อความ:", errorSummary(error));
+      }
+      try {
         await sendHelperMessage(targetChannel, {
-          content: `🎉 ยินดีด้วยค่ะ <@${userId}>! เลเวลของคุณอัปเป็น **Level ${newLevel}** แล้วค่ะ! ✨`,
-          files: [attachment],
+          content: "ยินดีด้วยค่ะ <@" + userId + ">! เลเวลของคุณอัปเป็น **Level " + newLevel + "** แล้วค่ะ",
+          ...(attachment ? { files: [attachment] } : {}),
         }, guildId);
-      } catch (cardErr) {
-        console.error("❌ ไม่สามารถสร้างการ์ด Level Up ได้:", errorSummary(cardErr));
-        await sendHelperMessage(targetChannel, {
-          content: `🎉 ยินดีด้วยค่ะ <@${userId}>! เลเวลของคุณอัปเป็น **Level ${newLevel}** แล้วค่ะ! ✨`,
-        }, guildId);
+      } catch (error) {
+        console.warn("อัปเลเวลแล้ว แต่ส่งประกาศไม่ได้:", errorSummary(error));
       }
     } else {
       // บันทึกแบบ Throttled ทุก 3-5 วินาที เพื่อไม่ให้บล็อก Node.js Event Loop

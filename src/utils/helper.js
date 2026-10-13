@@ -3,6 +3,7 @@ import { MessageFlags } from "discord.js";
 import { getHelperSettings, getHelperAvatarPath } from "./db.js";
 
 const webhookAvatars = new Map();
+const helperWebhooks = new Map();
 
 export function getReactionEmojiKey(emoji) {
   return emoji.id ?? emoji.name?.normalize("NFC").replace(/[\uFE0E\uFE0F]/g, "");
@@ -50,92 +51,121 @@ export async function deferCommand(interaction, isPrivate = true) {
   }
 }
 
-/**
- * ส่งข้อความไปยังห้องเป้าหมายด้วยตัวตนของ Helper ประจำเซิร์ฟเวอร์ (ผ่าน Webhook)
- * ใช้ channel.send() เมื่อไม่ได้เปิด Helper หรือ Discord ปฏิเสธ Webhook อย่างชัดเจน
- *
- * @param {import('discord.js').TextBasedChannel} channel - ห้องเป้าหมาย
- * @param {import('discord.js').MessageCreateOptions} payload - ข้อมูลข้อความ (content, embeds, files, components)
- * @param {string} [guildId] - ID ของเซิร์ฟเวอร์ (ไม่บังคับ)
- */
+// Cache tokens only in memory. Serializing preparation also avoids duplicate webhook creation.
+async function getHelperWebhook(channel, config = null, webhookId = null) {
+  const isThread = channel.isThread?.() === true;
+  const webhookChannel = isThread
+    ? (channel.parent ?? await channel.guild.channels.fetch(channel.parentId))
+    : channel;
+  if (!webhookChannel?.fetchWebhooks) throw new Error("ห้องนี้ไม่รองรับ Helper Webhook");
+  const botMember = webhookChannel.guild.members.me ?? await webhookChannel.guild.members.fetchMe();
+  if (!webhookChannel.permissionsFor(botMember)?.has("ManageWebhooks")) {
+    throw new Error("บอทต้องมีสิทธิ์ Manage Webhooks ในห้องนี้เพื่อใช้ชื่อ Helper");
+  }
+  if (isThread && !channel.permissionsFor(botMember)?.has("SendMessagesInThreads")) {
+    throw new Error("บอทต้องมีสิทธิ์ Send Messages in Threads ในเธรดนี้");
+  }
+
+  const cacheKey = webhookId ?? webhookChannel.id;
+  const task = (helperWebhooks.get(cacheKey) ?? Promise.resolve(null)).then(async (cached) => {
+    let webhook = cached;
+    if (!webhook) {
+      const webhooks = await webhookChannel.fetchWebhooks();
+      webhook = webhooks.find((item) => item.owner?.id === channel.client.user.id && item.token
+        && (!webhookId || item.id === webhookId));
+    }
+    if (!config) {
+      if (!webhook) throw new Error("ไม่พบ Webhook ของบอทที่ใช้ส่งข้อความนี้");
+      return webhook;
+    }
+
+    const localAvatar = getHelperAvatarPath(webhookChannel.guild.id);
+    const avatarVersion = localAvatar
+      ? localAvatar + ":" + fs.statSync(localAvatar).mtimeMs
+      : (config.avatar ?? null);
+    const avatarChanged = !webhook || webhookAvatars.get(webhook.id) !== avatarVersion;
+    const avatar = avatarChanged && localAvatar ? fs.readFileSync(localAvatar) : (config.avatar ?? null);
+    if (!webhook) {
+      webhook = await webhookChannel.createWebhook({ name: config.name, avatar, reason: "Seme Helper Persona Webhook" });
+      webhookAvatars.set(webhook.id, avatarVersion);
+    } else if (webhook.name !== config.name || avatarChanged) {
+      webhook = await webhook.edit({ name: config.name, ...(avatarChanged ? { avatar } : {}) });
+      webhookAvatars.set(webhook.id, avatarVersion);
+    }
+    return webhook;
+  });
+  helperWebhooks.set(cacheKey, task);
+  try {
+    const webhook = await task;
+    helperWebhooks.set(webhook.id, task);
+    return webhook;
+  } catch (error) {
+    if (helperWebhooks.get(cacheKey) === task) helperWebhooks.delete(cacheKey);
+    throw error;
+  }
+}
+
+function clearHelperWebhook(channel, webhookId) {
+  const channelId = channel.isThread?.() ? channel.parentId : channel.id;
+  helperWebhooks.delete(channelId);
+  helperWebhooks.delete(webhookId);
+  webhookAvatars.delete(webhookId);
+}
+
 export async function sendHelperMessage(channel, payload, guildId = null) {
   if (!channel?.send) throw new Error("ไม่พบห้องข้อความที่ส่งได้");
   const targetGuildId = guildId ?? channel.guild?.id;
+  if (!targetGuildId) return await channel.send(payload);
+  const config = getHelperSettings(targetGuildId);
+  if (!config?.enabled) return await channel.send(payload);
+  if (!config.name?.trim()) throw new Error("Helper เปิดอยู่แต่ไม่มีชื่อ กรุณาตั้งค่า /set helper setup ใหม่");
 
-  if (!targetGuildId) {
-    return await channel.send(payload);
+  const webhook = await getHelperWebhook(channel, config);
+  const webhookPayload = { ...payload, username: config.name };
+  delete webhookPayload.avatarURL;
+  if (channel.isThread?.()) webhookPayload.threadId = channel.id;
+  if (!getHelperAvatarPath(targetGuildId) && config.avatar?.startsWith("http")) {
+    webhookPayload.avatarURL = config.avatar;
   }
-
-  const helperConfig = getHelperSettings(targetGuildId);
-
-  // ถ้าไม่ได้เปิดใช้งาน หรือไม่ได้ตั้งชื่อ ให้ใช้ channel.send ตามปกติ
-  if (!helperConfig || !helperConfig.enabled || !helperConfig.name) {
-    return await channel.send(payload);
-  }
-
   try {
-    // ตรวจสอบสิทธิ์การจัดการ Webhook ของบอทในเซิร์ฟเวอร์
-    const botMember = channel.guild?.members.me ?? (await channel.guild?.members.fetchMe().catch(() => null));
-    if (botMember && !channel.permissionsFor(botMember)?.has("ManageWebhooks")) {
-      return await channel.send(payload);
-    }
-
-    if (!channel.fetchWebhooks) {
-      return await channel.send(payload);
-    }
-
-    const webhooks = await channel.fetchWebhooks().catch(() => null);
-    let webhook = null;
-
-    if (webhooks) {
-      // ค้นหา Webhook ที่สร้างโดยบอทของเรา
-      webhook = webhooks.find((w) => w.owner?.id === channel.client.user.id);
-    }
-
-    const localAvatar = getHelperAvatarPath(targetGuildId);
-    const avatarVersion = localAvatar && fs.existsSync(localAvatar)
-      ? `${localAvatar}:${fs.statSync(localAvatar).mtimeMs}`
-      : (helperConfig.avatar ?? null);
-    let avatarBuffer = null;
-    if (localAvatar && fs.existsSync(localAvatar) && (!webhook || webhookAvatars.get(webhook.id) !== avatarVersion)) {
-      avatarBuffer = fs.readFileSync(localAvatar);
-    }
-
-    // ถ้ายังไม่มี Webhook ในห้องนี้ ให้สร้างขึ้นใหม่
-    if (!webhook) {
-      webhook = await channel.createWebhook({
-        name: helperConfig.name,
-        avatar: avatarBuffer ?? helperConfig.avatar ?? undefined,
-        reason: "Seme Helper Persona Webhook",
-      });
-      webhookAvatars.set(webhook.id, avatarVersion);
-    } else if (webhook.name !== helperConfig.name || webhookAvatars.get(webhook.id) !== avatarVersion) {
-      // ถ้ามี Webhook อยู่แล้ว แต่อาจจะมีการเปลี่ยนชื่อหรืออัปโหลดรูปภาพใหม่
-      await webhook.edit({
-        name: helperConfig.name,
-        ...(webhookAvatars.get(webhook.id) !== avatarVersion
-          ? { avatar: avatarBuffer ?? helperConfig.avatar ?? null }
-          : {}),
-      });
-      webhookAvatars.set(webhook.id, avatarVersion);
-    }
-
-    // ส่งข้อความผ่าน Webhook พร้อมกำหนด username
-    const webhookPayload = {
-      ...payload,
-      username: helperConfig.name,
-    };
-
-    // avatarURL ใน send() รับเฉพาะ URL (http/https) ที่ยังไม่หมดอายุเท่านั้น
-    if (!localAvatar && helperConfig.avatar?.startsWith("http")) {
-      webhookPayload.avatarURL = helperConfig.avatar;
-    }
-
     return await webhook.send(webhookPayload);
-  } catch (err) {
-    // Only fall back for definite API rejection, not ambiguous delivery failures.
-    if (!Number.isInteger(err.code) || (err.status ?? 500) >= 500) throw err;
-    console.warn("ไม่สามารถส่งผ่าน Webhook ได้ ใช้ channel.send:", errorSummary(err));
-    return await channel.send(payload);
+  } catch (error) {
+    if (error.code === 10015) clearHelperWebhook(channel, webhook.id);
+    if (!Number.isInteger(error.code) || (error.status ?? 400) >= 500) {
+      const uncertain = new Error("การส่งข้อความอาจสำเร็จแล้ว แต่ยืนยันผลไม่ได้ กรุณาตรวจห้องก่อนลองใหม่", { cause: error });
+      uncertain.deliveryUncertain = true;
+      throw uncertain;
+    }
+    throw error;
   }
+}
+
+export async function editHelperMessage(message, payload) {
+  if (!message.webhookId) return await message.edit(payload);
+  const webhook = await getHelperWebhook(message.channel, null, message.webhookId);
+  try {
+    return await webhook.editMessage(message.id, {
+      ...payload, ...(message.channel.isThread?.() ? { threadId: message.channelId } : {}),
+    });
+  } catch (error) {
+    if (error.code === 10015) clearHelperWebhook(message.channel, webhook.id);
+    throw error;
+  }
+}
+
+export async function deleteHelperMessage(message) {
+  if (!message.webhookId) return await message.delete();
+  const webhook = await getHelperWebhook(message.channel, null, message.webhookId);
+  try {
+    return await webhook.deleteMessage(message.id, message.channel.isThread?.() ? message.channelId : undefined);
+  } catch (error) {
+    if (error.code === 10015) clearHelperWebhook(message.channel, webhook.id);
+    throw error;
+  }
+}
+
+export async function publishHelperResult(interaction, payload) {
+  const message = await sendHelperMessage(interaction.channel, payload, interaction.guildId);
+  await respondToInteraction(interaction, { content: "Success: ส่งผลลัพธ์เรียบร้อยแล้ว " + message.url });
+  return message;
 }

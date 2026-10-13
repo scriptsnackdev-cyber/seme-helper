@@ -1,10 +1,28 @@
 import { AttachmentBuilder } from "discord.js";
-import { getWelcomeSettings, getBannerPath } from "../utils/db.js";
+import { getWelcomeSettings, getBannerPath, getJailRecords } from "../utils/db.js";
 import { sendHelperMessage, errorSummary } from "../utils/helper.js";
 
 export function setupGuildMemberAddEvent(client) {
   client.on("guildMemberAdd", async (member) => {
     try {
+      // 0. ป้องกันการหนีคุก: หากสมาชิกกำลังติดคุกอยู่ ให้ใส่ยศคุกกลับและข้าม welcome
+      const jailRecords = getJailRecords(member.guild.id);
+      const jailRecord = jailRecords[member.id];
+      if (jailRecord && Date.now() < jailRecord.releaseAt) {
+        if (jailRecord.jailRoleId) {
+          try {
+            const jailRole = await member.guild.roles.fetch(jailRecord.jailRoleId);
+            if (jailRole) {
+              await member.roles.add(jailRole);
+              console.log(`🔒 [Jail Evade Prevention] สมาชิก ${member.user.tag} กำลังติดคุก บอทใส่ยศ ${jailRole.name} กลับให้ทันที`);
+            }
+          } catch (jailErr) {
+            console.error(`❌ [Jail Error] ไม่สามารถใส่ยศคุกให้ ${member.user.tag}:`, errorSummary(jailErr));
+          }
+        }
+        return;
+      }
+
       const settings = getWelcomeSettings(member.guild.id);
 
       // 1. แจกยศสมาชิกใหม่อัตโนมัติ

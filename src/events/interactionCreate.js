@@ -30,13 +30,15 @@ import { handleSetGiveRoleCommands } from "../commands/set/setGiveRole.js";
 import { handleSetHelperCommands } from "../commands/set/setHelper.js";
 import { handleSetIntroCommands } from "../commands/set/setIntro.js";
 import { handleSetReactionRoleCommands } from "../commands/set/setReactionRole.js";
+import { handleSetJailCommands } from "../commands/set/setJail.js";
 import { handleGiveRoleCommand } from "../commands/giverole.js";
+import { handleJailCommand, handleUnjailCommand } from "../commands/jail.js";
 import { handleQuizCommand } from "../commands/quiz.js";
 import { handleImageCommand } from "../commands/image.js";
 import { handleHelperCommand } from "../commands/helper.js";
 import { handleRankCommand, handleLeaderboardCommand } from "../commands/rank.js";
 import { hasStaffPermission, assertRoleManageable } from "../utils/permission.js";
-import { sendHelperMessage, respondToInteraction, deferCommand, errorSummary } from "../utils/helper.js";
+import { sendHelperMessage, editHelperMessage, respondToInteraction, deferCommand, errorSummary } from "../utils/helper.js";
 
 const quizSessions = new Map();
 const processingReviews = new Set();
@@ -94,9 +96,7 @@ export function setupInteractionCreateEvent(client) {
   client.on("interactionCreate", async (interaction) => {
     try {
       if (interaction.isChatInputCommand()) {
-        const publicReply = ["rank", "leaderboard", "giverole"].includes(interaction.commandName)
-          || (interaction.commandName === "image" && interaction.options.getSubcommand() === "view");
-        await deferCommand(interaction, !publicReply);
+        await deferCommand(interaction);
       }
       // 1. ปุ่มรับยศทันที
       if (interaction.isButton() && interaction.customId.startsWith("claim_role_")) {
@@ -236,7 +236,7 @@ export function setupInteractionCreateEvent(client) {
             const updatedEmbed = EmbedBuilder.from(originalEmbed)
               .setColor(0x95a5a6)
               .setTitle(`⚠️ ไม่พบสมาชิกในเซิร์ฟเวอร์ (โดย ${interaction.user.username})`);
-            await currentMessage.edit({ embeds: [updatedEmbed], components: [] }).catch(() => null);
+            await editHelperMessage(currentMessage, { embeds: [updatedEmbed], components: [] }).catch(() => null);
             await respondToInteraction(interaction, { content: "❌ ไม่พบสมาชิกในเซิร์ฟเวอร์นี้ (สมาชิกอาจจะออกจากเซิร์ฟเวอร์ไปแล้วค่ะ)", flags: MessageFlags.Ephemeral });
             return;
           }
@@ -274,7 +274,7 @@ export function setupInteractionCreateEvent(client) {
             .setColor(isApprove ? 0x57f287 : 0xed4245)
             .setTitle((isApprove ? "อนุมัติสมาชิกแล้ว" : "ไม่อนุมัติสมาชิก") + " (โดย " + interaction.user.username + ")");
           try {
-            await currentMessage.edit({ embeds: [updatedEmbed], components: [] });
+            await editHelperMessage(currentMessage, { embeds: [updatedEmbed], components: [] });
           } catch (error) {
             console.warn("อัปเดตข้อความฟอร์มไม่สำเร็จ:", errorSummary(error));
             await respondToInteraction(interaction, {
@@ -556,7 +556,7 @@ export function setupInteractionCreateEvent(client) {
 
         const btnRow = new ActionRowBuilder().addComponents(approveBtn, rejectBtn);
 
-        await logChannel.send({ embeds: [logEmbed], components: [btnRow] });
+        await sendHelperMessage(logChannel, { embeds: [logEmbed], components: [btnRow] }, guildId);
         await respondToInteraction(interaction, {
           content: "Success: ส่งฟอร์มให้ทีมงานตรวจสอบเรียบร้อยแล้ว" + pendingNotice,
         });
@@ -640,6 +640,16 @@ export function setupInteractionCreateEvent(client) {
         return;
       }
 
+      if (commandName === "jail") {
+        await handleJailCommand(interaction);
+        return;
+      }
+
+      if (commandName === "unjail") {
+        await handleUnjailCommand(interaction);
+        return;
+      }
+
       // 3. คำสั่งบอทผู้ช่วย (Helper Message Command) - เฉพาะผู้มีสิทธิ์ ManageMessages หรือยศสูงกว่าบอท
       if (commandName === "helper") {
         const hasPermission = await hasStaffPermission(interaction, PermissionFlagsBits.ManageMessages);
@@ -689,6 +699,8 @@ export function setupInteractionCreateEvent(client) {
           await handleSetIntroCommands(interaction);
         } else if (subcommandGroup === "reaction-role") {
           await handleSetReactionRoleCommands(interaction);
+        } else if (subcommandGroup === "jail" || subcommand === "jail") {
+          await handleSetJailCommands(interaction);
         } else {
           if (!interaction.replied) {
             await respondToInteraction(interaction, { content: "⚠️ ไม่พบฟังก์ชันคำสั่งที่เลือกค่ะ", flags: MessageFlags.Ephemeral });
@@ -714,7 +726,7 @@ export function setupInteractionCreateEvent(client) {
       }
       console.error("❌ เกิดข้อผิดพลาดใน interactionCreate:", errorSummary(err));
       if (interaction.deferred || interaction.replied) {
-        await respondToInteraction(interaction, { content: `ประมวลผลไม่สำเร็จ (รหัส ${err.code ?? "UNKNOWN"}) กรุณาตรวจสอบสิทธิ์และการตั้งค่า` });
+        await respondToInteraction(interaction, { content: err.code ? `ประมวลผลไม่สำเร็จ (รหัส ${err.code}) กรุณาตรวจสอบสิทธิ์และการตั้งค่า` : err.message });
       } else {
         await respondToInteraction(interaction, { content: `ประมวลผลไม่สำเร็จ (รหัส ${err.code ?? "UNKNOWN"})`, flags: MessageFlags.Ephemeral });
       }

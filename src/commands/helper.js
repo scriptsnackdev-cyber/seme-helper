@@ -29,7 +29,9 @@ export async function handleHelperCommand(interaction) {
     } catch (err) {
       console.error("❌ ไม่สามารถส่งข้อความผ่าน /helper talk ได้:", errorSummary(err));
       await respondToInteraction(interaction, {
-        content: `ส่งข้อความไม่สำเร็จ กรุณาตรวจสอบสิทธิ์ห้องและไฟล์แนบ (รหัส ${err.code ?? "UNKNOWN"})`,
+        content: err.deliveryUncertain ? err.message : (err.code
+          ? `ส่งข้อความไม่สำเร็จ กรุณาตรวจสอบสิทธิ์ห้องและไฟล์แนบ (รหัส ${err.code})`
+          : err.message),
         flags: MessageFlags.Ephemeral,
       });
       return;

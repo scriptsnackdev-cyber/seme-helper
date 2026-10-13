@@ -1,4 +1,75 @@
-# Reaction Roles แบบเลือกหลายยศ
+# ระบบคุมขังชั่วคราว (Jail System)
+
+## สิ่งที่เพิ่มและเปลี่ยนแปลง
+1. **คำสั่ง `/set jail`**:
+   - `/set jail role [role]`: กำหนดยศ Jail Role ประจำเซิร์ฟเวอร์ บันทึกลง `database/<guildId>/jail/setting.json` มีการตรวจสิทธิ์และ Role Hierarchy ทั้งของผู้สั่งและของบอท
+   - `/set jail initial-role`: สร้างยศ `jail` ใหม่อัตโนมัติ (ปิดสิทธิ์ทุกอย่าง `0n`) และบันทึกเป็น Jail Role ของเซิร์ฟเวอร์ทันที
+   - `/set jail status`: แสดงยศห้องขังที่ตั้งค่าไว้ จำนวนผู้ถูกคุมขัง และรายชื่อผู้ถูกคุมขังพร้อมเวลาที่จะได้รับการปลด (<t:...:R>)
+   - `/set jail remove-role`: ลบการตั้งค่ายศห้องขังออกจากระบบ
+2. **คำสั่ง `/jail $user $time [reason]`**:
+   - รับเวลาเป็นหน่วย **นาที** (1 - 43,200 นาที หรือ 30 วัน)
+   - ตรวจสอบความปลอดภัย: ห้ามขังบอท, ห้ามขังตัวเอง, ห้ามขังเจ้าของเซิร์ฟเวอร์, ตรวจ Role Hierarchy และตรวจสอบว่าเซิร์ฟเวอร์ตั้งค่ายศคุกแล้ว
+   - ดึงรายชื่อยศเดิมทั้งหมด (เก็บเฉพาะยศที่ถอดได้ ละเว้น Managed/Integration Roles และ @everyone)
+   - สลับยศ: ถอดยศเดิมออกทั้งหมด แล้วใส่ยศ Jail Role ให้สมาชิก
+   - คำนวณ `releaseAt = Date.now() + time * 60 * 1000` และบันทึกลง `database/<guildId>/jail/records.json`
+   - ส่งประกาศในห้องผ่าน Helper และตอบยืนยันคำสั่ง
+3. **คำสั่ง `/unjail $user [reason]`**:
+   - ปลดสมาชิกออกจากห้องขังก่อนกำหนด
+   - คืนยศเดิมทั้งหมดที่บันทึกไว้ใน `records.json` (กรองเฉพาะยศที่ยังคงมีอยู่ในเซิร์ฟเวอร์) และถอดยศ Jail Role ออก
+   - ลบรายการออกจาก `records.json`
+4. **ระบบตรวจสอบเวลาแบบ Timestamp สแกนรอบละ 1 นาที (ทุก 60 วินาที)**:
+   - ฟังก์ชัน `checkAndReleaseExpiredJails(client)` ใน `src/commands/jail.js`
+   - ทำงานผ่าน `startJailCheckInterval(client)` ใน `src/events/ready.js`
+   - ไม่ใช้นับถอยหลังแยกรายคนใน RAM ใช้ทรัพยากรเบามาก
+   - ตรวจสอบเพียง `Date.now() >= record.releaseAt`: หากครบกำหนดจะคืนยศเดิม ถอดยศคุก และลบรายการออกจาก JSON ทันที
+   - หากบอทรีสตาร์ทหรือปิดไป เมื่อเปิดขึ้นมาจะตรวจและปลดยศคนที่เลยเวลาออกให้ทันที
+5. **ระบบป้องกันการหนีคุกใน `guildMemberAdd.js`**:
+   - หากสมาชิกที่กำลังติดคุกอยู่ (`Date.now() < releaseAt`) ออกจากเซิร์ฟเวอร์แล้วเข้ามาใหม่ บอทจะไม่แจก Welcome Role แต่จะใส่ยศ Jail Role กลับให้ทันทีจนกว่าจะครบเวลา
+
+## ผลการตรวจสอบ
+- **Syntax Check (`node --check`)**: ผ่าน 100% ทุกไฟล์ (`src/index.js`, `src/utils/db.js`, `src/commands/set/setJail.js`, `src/commands/jail.js`, `src/events/ready.js`, `src/events/interactionCreate.js`, `src/events/guildMemberAdd.js`)
+- ไม่มีการรัน dev server หรือแตะต้อง database โดยตรง
+- ไม่มีการเพิ่ม dependency ใหม่
+
+---
+
+# Helper Webhook สำหรับข้อความสาธารณะทั้งหมด
+
+## สิ่งที่เปลี่ยน
+- Welcome, level-up, intro, helper talk, ข้อความปุ่มรับยศ, ข้อความเปิดฟอร์ม, Quiz setup และประกาศสมาชิกใช้ตัวส่ง Helper เดิมที่ปรับแล้ว
+- Reaction Roles และคำตอบฟอร์มที่ส่งเข้าห้องทีมงานเปลี่ยนเป็น Helper Webhook
+- ผลสาธารณะ `/giverole`, `/rank`, `/leaderboard`, `/image view` และ image batches ส่งในห้องผ่าน Helper ส่วนการตอบรับและ Success/error ส่งส่วนตัวให้ผู้สั่ง
+- เมื่อ Helper เปิดและตั้งชื่อแล้ว ใช้ชื่อและรูปล่าสุดตาม config เสมอ ไม่เปลี่ยนไปส่งชื่อบอทเงียบ ๆ เมื่อ Webhook ส่งไม่ได้ หาก Helper ปิด/reset หรือไม่ได้ตั้งค่า ใช้ตัวบอทตามเดิม
+- Helper เปิดแต่ไม่มีชื่อหรือขาด Manage Webhooks แจ้งปัญหาตรงจริง คำตอบ interaction ส่วนตัว/status/Quiz ส่วนตัวยังคงใช้ชื่อแอปตามข้อจำกัด Discord
+- Webhook cache อยู่ในหน่วยความจำเท่านั้น จัดลำดับการหา/สร้าง/อัปเดตในแต่ละห้อง ป้องกันสร้างซ้ำเมื่อมีข้อความพร้อมกัน และอัปเดตรูปเมื่อ version เปลี่ยน
+- รองรับ thread โดยใช้ Webhook ห้องแม่และส่ง threadId ตรวจ Manage Webhooks ที่ห้องแม่และ Send Messages in Threads ที่ thread
+- การแก้/ลบ Reaction Roles, ผลอนุมัติฟอร์ม และ Sticky ใช้ token ของ Webhook ที่เป็นเจ้าของข้อความนั้น โดยตรวจ owner ของบอท ข้อความบอทเก่ายังใช้ native edit/delete ได้ แม้ชื่อ Helper เปลี่ยนหรือปิด Helper แล้ว
+- เมื่อ Webhook ถูกลบ ล้าง cache เพื่อให้คำสั่งครั้งถัดไปหา/สร้างใหม่ ไม่ส่งคำสั่งเดิมซ้ำเมื่อผลส่งไม่แน่นอน
+- แยกการสร้างการ์ดออกจากการส่ง rank/level-up/giverole ใช้ข้อความล้วนเฉพาะกรณีสร้างการ์ดไม่สำเร็จ การส่งล้มเหลวไม่ทำให้โพสต์ข้อความล้วนซ้ำ
+- `/giverole` แจกยศแล้วแต่ส่งประกาศไม่ได้จะแจ้งว่าการแจกยศสำเร็จพร้อมปัญหาประกาศ ส่วน image batches แจ้งจำนวนที่ยืนยันส่งได้ หากเครือข่ายทำให้ไม่ทราบผลจะบอกให้ตรวจห้องก่อนลองใหม่
+- ไม่บันทึก token หรือ payload ใน log และไม่เปลี่ยนข้อมูล database จริงระหว่างพัฒนา
+
+## ผลตรวจ
+- Syntax: 24 ไฟล์ผ่าน 0 errors; static module linking: 33 modules ผ่านโดยไม่รันโมดูลโปรเจกต์; git diff --check ผ่าน
+- ตรวจจุด send/edit/delete/followUp ทั้งหมด: การโพสต์สาธารณะอยู่ใน sendHelperMessage ส่วน followUp ที่เหลือเป็นข้อความส่วนตัวเท่านั้น
+- Mock ผ่าน: หลายห้อง/หลายเซิร์ฟเวอร์ ชื่อและรูปใหม่ cache และการสร้างพร้อมกัน สิทธิ์ไม่พอ Helper ปิด thread send/edit/delete การแก้ข้อความ Webhook เก่าด้วย owner ID ข้อความบอทเก่า token ไม่หลุด log Webhook ถูกลบและการส่งที่ยืนยันผลไม่ได้ไม่มี retry
+- Mock handlers ผ่าน: rank/leaderboard/giverole ใช้ชื่อ Helper และ Success ส่วนตัว การ์ดล้มเหลวใช้ข้อความโดยไม่โพสต์ซ้ำ image batches 10/10/3 รูปและสำเร็จบางส่วน Reaction Roles แก้ผ่าน Webhook และไม่เพิ่มคำแนะนำที่ผู้ใช้ขอเอาออกกลับมา
+- Mock ฟอร์ม/Sticky ผ่าน: ห้องทีมงานใช้ Helper อนุมัติแก้ผ่าน Webhook พร้อมลำดับเพิ่ม Approved ก่อนถอด Pending ข้อความบอทเก่าและ Webhook หลังปิด Helper ยังแก้ได้ อนุมัติล้มเหลวคงปุ่มไว้ Sticky ลบผ่าน Webhook และไม่โพสต์ซ้ำเมื่อการลบเดิมล้มเหลว
+- ไม่มี dependency หรือไฟล์ tests ใหม่ ไม่รันบอท/dev server ไม่เชื่อม Discord หรือ database จริง การตรวจ storage/API เป็น mock ในหน่วยความจำทั้งหมด
+- ไม่มี lint script หรือ TypeScript config ในโปรเจกต์นี้ จึงไม่ได้อ้างว่าผ่าน npm run lint/npx tsc
+
+## หลังนำโค้ดขึ้นเซิร์ฟเวอร์
+- Restart PM2 แล้วตรวจ `/set helper setup` และให้บอทมี Manage Webhooks ในห้องที่จะโพสต์ ยศและ reaction permissions เดิมยังจำเป็น
+- ลองชื่อ/รูปใหม่บน Reaction Roles, ฟอร์มทีมงาน, Welcome, level-up, Intro, giverole, rank/leaderboard และ image view
+- ลองกดรับยศ/Quiz/อนุมัติฟอร์ม และการลบ Sticky รวมถึงข้อความบอทเก่า เพื่อยืนยันกับ Discord จริง
+
+ข้อจำกัด: ยังไม่ได้ทดสอบเซิร์ฟเวอร์จริง ชื่อ/รูปผู้ส่งของข้อความเก่าที่โพสต์ไปแล้วไม่ได้เปลี่ยนย้อนหลัง คำตอบส่วนตัวเปลี่ยนชื่อเป็น Helper ไม่ได้ และการส่งที่เครือข่ายไม่คืนผลอาจสำเร็จบน Discord แล้ว ระบบจะแจ้งตรวจห้องก่อนลองใหม่
+
+---
+
+# ผลงานเดิม: Reaction Roles แบบเลือกหลายยศ
+
+ปรับข้อความล่าสุด: ลบคำแนะนำอัตโนมัติออกจาก embed แล้ว ข้อความที่สร้างใหม่แสดงเฉพาะหัวข้อ คำอธิบายที่ผู้ใช้กรอก และรายการอิโมจิ–ยศ ตรวจ syntax และ git diff --check ผ่าน ข้อความเดิมบน Discord ยังไม่ได้แก้
 
 ## การใช้งาน
 - หลังอัปโหลดโค้ดและ restart PM2 บอทลงทะเบียนคำสั่งใหม่ `/set reaction-role setup`

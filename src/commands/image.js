@@ -1,4 +1,4 @@
-import { respondToInteraction, deferCommand, errorSummary } from "../utils/helper.js";
+import { respondToInteraction, deferCommand, errorSummary, sendHelperMessage } from "../utils/helper.js";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
@@ -17,7 +17,7 @@ export async function handleImageCommand(interaction) {
   }
 
   const subcommand = interaction.options.getSubcommand();
-  await deferCommand(interaction, subcommand !== "view");
+  await deferCommand(interaction);
   ensureGuildDatabase(guildId);
 
   if (subcommand === "add") {
@@ -261,35 +261,33 @@ export async function handleImageCommand(interaction) {
     const galleryData = getImageGalleryData(guildId);
     const isBlur = galleryData.titles?.[categoryTitle]?.blur === true;
 
-    // Discord แนบไฟล์ได้สูงสุด 10 รูปต่อ 1 ข้อความ
-    const firstChunk = files.slice(0, 10);
-    const attachments = firstChunk.map((file, idx) => {
-      const builder = new AttachmentBuilder(path.join(targetDir, file));
-      const prefix = isBlur ? "SPOILER_" : "";
-      builder.setName(`${prefix}image_${idx + 1}_${file}`);
-      return builder;
-    });
-
-    const blurLabel = isBlur ? " 🔞 (Spoiler)" : "";
-    const firstReply = await respondToInteraction(interaction, {
-      content: `🖼️ **รูปภาพในคลัง "${categoryTitle}" (ทั้งหมด ${files.length} รูป):**${blurLabel}\n*💡 คำแนะนำ: หากต้องการลบเฉพาะรูป สามารถใช้คำสั่ง \`/image delete title:${categoryTitle} index:<ลำดับรูป>\` ได้ค่ะ*`,
-      files: attachments,
-    });
-
-    if (!firstReply) return;
-    if (files.length > 10) {
-      for (let i = 10; i < files.length; i += 10) {
-        const chunk = files.slice(i, i + 10);
-        const nextAttachments = chunk.map((file, idx) => {
-          const builder = new AttachmentBuilder(path.join(targetDir, file));
-          const prefix = isBlur ? "SPOILER_" : "";
-          builder.setName(`${prefix}image_${i + idx + 1}_${file}`);
-          return builder;
-        });
-        await interaction.followUp({ files: nextAttachments }).catch((err) => {
-          console.error("❌ ไม่สามารถส่งรูปภาพเพิ่มเติมได้:", errorSummary(err));
-        });
+    let sentCount = 0;
+    let firstMessage;
+    try {
+      for (let index = 0; index < files.length; index += 10) {
+        const chunk = files.slice(index, index + 10);
+        const attachments = chunk.map((file, offset) => new AttachmentBuilder(path.join(targetDir, file), {
+          name: (isBlur ? "SPOILER_" : "") + "image_" + (index + offset + 1) + "_" + file,
+        }));
+        const message = await sendHelperMessage(interaction.channel, {
+          ...(index === 0 ? {
+            content: "รูปภาพในคลัง **" + categoryTitle + "** (ทั้งหมด " + files.length + " รูป)" + (isBlur ? " (Spoiler)" : "")
+              + "\nลบเฉพาะรูปด้วย `/image delete title:" + categoryTitle + " index:<ลำดับรูป>`",
+          } : {}),
+          files: attachments,
+        }, guildId);
+        if (index === 0) firstMessage = message;
+        sentCount += chunk.length;
       }
+    } catch (error) {
+      console.warn("ส่งคลังรูปภาพผ่าน Helper ไม่ครบ:", errorSummary(error));
+      await respondToInteraction(interaction, {
+        content: "ยืนยันการส่งสำเร็จ " + sentCount + " / " + files.length + " รูป ชุดถัดไปมีปัญหา: " + (error.code
+          ? "กรุณาตรวจขนาดไฟล์และสิทธิ์ Helper Webhook (รหัส " + error.code + ")"
+          : error.message),
+      });
+      return;
     }
+    await respondToInteraction(interaction, { content: "Success: ส่งรูปภาพ " + sentCount + " รูปเรียบร้อยแล้ว " + firstMessage.url });
   }
 }
