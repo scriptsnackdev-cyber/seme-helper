@@ -1,6 +1,7 @@
-import { MessageFlags, EmbedBuilder } from "discord.js";
+import { MessageFlags, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from "discord.js";
 import { respondToInteraction } from "../utils/helper.js";
 import { generateMusicPanel, fmt } from "../utils/musicUI.js";
+import { handleAutoReplenish } from "../handlers/disTubeHandler.js";
 
 export async function handleMusicCommand(interaction) {
   const { guild, member, channel, client } = interaction;
@@ -192,7 +193,8 @@ export async function handleMusicCommand(interaction) {
 
   if (subcommand === "autoplay") {
     const state = queue.toggleAutoplay();
-    await respondToInteraction(interaction, { content: `📻 ระบบ Autoplay: **${state ? "เปิดใช้งาน (ON)" : "ปิดใช้งาน (OFF)"}**` });
+    if (state) handleAutoReplenish(queue, queue.songs[0]);
+    await respondToInteraction(interaction, { content: `📻 ระบบ Autoplay: **${state ? "เปิดใช้งาน (ON) - เติม 10 เพลงอัตโนมัติ" : "ปิดใช้งาน (OFF)"}**` });
     return;
   }
 }
@@ -202,6 +204,23 @@ export async function handleMusicCommand(interaction) {
  */
 export async function handleMusicButtonInteraction(interaction) {
   const { customId, guild, member, client } = interaction;
+
+  // 1. ปุ่มเปิด Modal เพิ่มเพลง (ไม่ต้องมีคิวเพลงก็กดเปิดได้)
+  if (customId === "music_add_modal") {
+    const modal = new ModalBuilder()
+      .setCustomId("music_add_modal_submit")
+      .setTitle("➕ เพิ่มเพลงเข้าคิว");
+    const input = new TextInputBuilder()
+      .setCustomId("music_query_input")
+      .setLabel("พิมพ์ชื่อเพลงหรือลิงก์ YouTube")
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder("เช่น ชื่อเพลง หรือ ลิงก์ YouTube...")
+      .setRequired(true);
+    modal.addComponents(new ActionRowBuilder().addComponents(input));
+    await interaction.showModal(modal);
+    return;
+  }
+
   const queue = client.distube.getQueue(guild?.id);
 
   if (!queue) {
@@ -246,7 +265,8 @@ export async function handleMusicButtonInteraction(interaction) {
         break;
       case "music_autoplay": {
         const newAutoplayState = queue.toggleAutoplay();
-        const statusText = newAutoplayState ? "✅ เปิดใช้ Autoplay แล้วค่ะ" : "❌ ปิด Autoplay แล้วค่ะ";
+        if (newAutoplayState) handleAutoReplenish(queue, queue.songs[0]);
+        const statusText = newAutoplayState ? "✅ เปิดใช้ Autoplay แล้วค่ะ (จะเติม 10 เพลงอัตโนมัติ)" : "❌ ปิด Autoplay แล้วค่ะ";
         await interaction.followUp({ content: statusText, flags: [MessageFlags.Ephemeral] }).catch(() => {});
         break;
       }

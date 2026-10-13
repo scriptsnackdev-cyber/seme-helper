@@ -125,7 +125,7 @@ export async function handleSetJailCommands(interaction) {
       const createdRole = await guild.roles.create({
         name: "jail",
         permissions: 0n,
-        color: 0x546e7a,
+        colors: { primaryColor: 0x546e7a },
         reason: `Created by ${interaction.user.tag} via /set jail initial-role`,
       });
 

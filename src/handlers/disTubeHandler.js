@@ -1,5 +1,31 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder } from "discord.js";
-import { generateMusicPanel } from "../utils/musicUI.js";
+import { generateMusicPanel, generateFinishedPanel } from "../utils/musicUI.js";
+import { fetchAuto10Songs } from "../utils/musicPlugin.js";
+
+/**
+ * เติม 10 เพลงอัตโนมัติเมื่อเปิด Auto และเพลงใกล้หมด
+ */
+export async function handleAutoReplenish(queue, song) {
+  if (!queue || !queue.autoplay || queue._isReplenishing) return;
+  if (queue.songs.length > 1) return;
+
+  queue._isReplenishing = true;
+  try {
+    const currentSong = song || queue.songs[0];
+    const autoSongs = await fetchAuto10Songs(queue, currentSong);
+    if (autoSongs && autoSongs.length > 0) {
+      queue.addToQueue(autoSongs);
+      const embed = new EmbedBuilder()
+        .setColor(0x3b82f6)
+        .setDescription(`📻 **[Auto]** เพิ่ม 10 เพลงถัดไปเข้าคิวให้อัตโนมัติแล้วค่ะ! (ดูคิวได้ใน \`/music queue\`)`);
+      queue.textChannel?.send({ embeds: [embed] }).catch(() => {});
+    }
+  } catch (err) {
+    console.warn("⚠️ [handleAutoReplenish Error]:", err?.message || err);
+  } finally {
+    queue._isReplenishing = false;
+  }
+}
 
 export function setupDisTubeEvents(client) {
   if (!client.distube) return;
@@ -42,13 +68,31 @@ export function setupDisTubeEvents(client) {
       queue.textChannel?.send({ embeds: [embed] }).catch(() => {});
     })
     .on("addList", async (queue, playlist) => {
+      if (playlist._playlistContext) {
+        queue._playlistContext = playlist._playlistContext;
+      }
       const embed = new EmbedBuilder()
         .setColor(0x3b82f6)
         .setTitle("📑 เพิ่มเพลย์ลิสต์แล้ว!")
         .setDescription(`**[${playlist.name}](${playlist.url})** (${playlist.songs.length} เพลง)`);
       queue.textChannel?.send({ embeds: [embed] }).catch(() => {});
     })
-    .on("finishSong", async (queue) => {
+    .on("finishSong", async (queue, song) => {
+      if (queue._liveInterval) clearInterval(queue._liveInterval);
+
+      if (queue._activeMsg && song) {
+        try {
+          const { embeds, components } = generateFinishedPanel(song, queue._activeMsg.components);
+          await queue._activeMsg.edit({ embeds, components }).catch(() => {});
+        } catch {}
+      }
+
+      // ตรวจสอบระบบ Autoplay เติม 10 เพลงเมื่อเพลงจบและคิวใกล้หมด (เฉพาะเมื่อเปิด Auto)
+      if (queue.autoplay && queue.songs.length <= 1) {
+        handleAutoReplenish(queue, song);
+      }
+    })
+    .on("finish", async (queue) => {
       if (queue._liveInterval) clearInterval(queue._liveInterval);
     })
     .on("error", (error, queueOrChannel) => {

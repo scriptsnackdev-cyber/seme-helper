@@ -106,6 +106,35 @@ export function setupInteractionCreateEvent(client) {
         return;
       }
 
+      // 0.1 จัดการ Modal Submit เพิ่มเพลงเข้าคิว
+      if (interaction.isModalSubmit() && interaction.customId === "music_add_modal_submit") {
+        const query = interaction.fields.getTextInputValue("music_query_input");
+        const voiceChannel = interaction.member?.voice?.channel;
+
+        if (!voiceChannel) {
+          await interaction.reply({
+            content: "❌ คุณต้องอยู่ในห้องพูดคุย (Voice Channel) ก่อนนะคะ",
+            flags: [MessageFlags.Ephemeral],
+          });
+          return;
+        }
+
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+        try {
+          await interaction.client.distube.play(voiceChannel, query, {
+            member: interaction.member,
+            textChannel: interaction.channel,
+          });
+          await interaction.editReply({
+            content: `✅ กำลังค้นหาและเพิ่มเพลง **${query}** เข้าคิวให้เรียบร้อยแล้วค่ะ!`,
+          });
+        } catch (err) {
+          console.warn("⚠️ [Music Add Modal Error]:", err?.message || err);
+          await interaction.editReply({ content: "❌ เกิดข้อผิดพลาดในการเล่นหรือเพิ่มเพลงนี้ค่ะ" });
+        }
+        return;
+      }
+
       // 1. ปุ่มรับยศทันที
       if (interaction.isButton() && interaction.customId.startsWith("claim_role_")) {
         const parts = interaction.customId.split("_");

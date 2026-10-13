@@ -49,10 +49,41 @@ export function generateMusicPanel(queue) {
       .setCustomId("music_autoplay")
       .setLabel("📻 Auto")
       .setStyle(queue.autoplay ? ButtonStyle.Primary : ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("music_queue_btn").setLabel("📋 คิวเพลง").setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId("music_queue_btn").setLabel("📋 คิวเพลง").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId("music_add_modal").setLabel("➕ เพิ่มเพลง").setStyle(ButtonStyle.Success)
   );
 
   return { embeds: [embed], components: [row1, row2] };
+}
+
+/**
+ * สร้าง Embed และ Components เมื่อเพลงเล่นจบแล้ว (สีเขียว success และปิดปุ่ม)
+ * @param {import('distube').Song} song 
+ * @param {ActionRowBuilder[]} [existingComponents]
+ * @returns {{ embeds: EmbedBuilder[], components: ActionRowBuilder[] }}
+ */
+export function generateFinishedPanel(song, existingComponents = []) {
+  const total = song?.duration || 0;
+  const progress = total > 0
+    ? `\`${fmt(total)}\` ${"▓".repeat(15)} \`${fmt(total)}\``
+    : "🔴 สิ้นสุดการถ่ายทอดสด";
+
+  const embed = new EmbedBuilder()
+    .setColor(0x22c55e)
+    .setDescription(`**[${song?.name || "ไม่ทราบชื่อเพลง"}](${song?.url || ""})**`)
+    .addFields({ name: "📊 ความคืบหน้า (เล่นจบแล้ว)", value: progress })
+    .setThumbnail(song?.thumbnail || null)
+    .setTimestamp();
+
+  if (song?.uploader?.name) embed.setAuthor({ name: `📺 ${song.uploader.name}` });
+
+  const disabledComponents = (existingComponents || []).map((row) => {
+    return new ActionRowBuilder().addComponents(
+      (row.components || []).map((comp) => ButtonBuilder.from(comp).setDisabled(true))
+    );
+  });
+
+  return { embeds: [embed], components: disabledComponents };
 }
 
 export function makeProgressBar(current, total) {

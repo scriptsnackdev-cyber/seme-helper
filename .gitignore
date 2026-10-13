@@ -5,5 +5,7 @@ npm-debug.log*
 .DS_Store
 serverlist.json
 database/
-
-
+*.old
+*.exe.old
+yt-dlp.exe
+yt-dlp
