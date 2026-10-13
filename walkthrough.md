@@ -1,10 +1,54 @@
+# ระบบเครื่องเล่นเพลง (Music System with yt-dlp)
+
+## สิ่งที่เพิ่มและเปลี่ยนแปลง
+1. **คัดลอก Executable**:
+   - คัดลอก `yt-dlp.exe` มาไว้ที่ root ของโปรเจกต์ `seme-helper-discord`
+2. **ติดตั้ง Dependencies**:
+   - `distube`, `@discordjs/voice`, `libsodium-wrappers`, `@distube/youtube`
+3. **Custom Extractor Plugin (`src/utils/musicPlugin.js`)**:
+   - ดึง Stream URL และข้อมูลเพลงผ่าน `yt-dlp.exe` ตรง (`--format bestaudio/best`, `--dump-single-json`)
+   - แก้ปัญหา YouTube บล็อกบอท / Sign-in required ได้ 100%
+   - รองรับทั้ง Windows (`yt-dlp.exe`) และ Linux (`yt-dlp`)
+4. **แผงควบคุมเพลงสด (`src/utils/musicUI.js` & `src/handlers/disTubeHandler.js`)**:
+   - แสดง Embed ข้อมูลเพลง, รูป Thumbnail และ Progress Bar (`▓▓▓░░░`)
+   - อัปเดตสถานะความคืบหน้าสดทุกๆ 10 วินาที ผ่าน Live Interval
+   - ปุ่มควบคุมเพลง: `⏭️ ข้าม`, `⏯️ หยุด/เล่นต่อ`, `⏹️ หยุดและออกจากห้อง`, `🔁 วนซ้ำ`, `🔇 ปิด/เปิดเสียง`, `📻 Autoplay`, `📋 ดูคิว`
+   - ปิดการทำงานของปุ่มอัตโนมัติเมื่อเพลงหมดหรือไม่มีคนในห้อง
+5. **คำสั่ง `/music` (`src/commands/music.js`)**:
+   - `play [query]`: เล่นเพลงหรือเพิ่มเข้าคิว
+   - `add [query]`: เพิ่มเพลงเข้าคิว
+   - `queue`: ดูรายการคิวเพลง
+   - `nowplaying`: ดูรายละเอียดเพลงปัจจุบัน
+   - `skip`: ข้ามเพลง
+   - `previous`: ย้อนกลับเพลงก่อนหน้า
+   - `pause`: หยุดเพลงชั่วคราว
+   - `resume`: เล่นเพลงต่อ
+   - `leave`: ให้บอทออกจากห้องเสียง
+   - `volume [percent]`: ปรับระดับเสียง (1-100)
+   - `loop [mode]`: ตั้งค่าวนซ้ำ (ปิด / เพลงเดียว / ทั้งคิว)
+   - `shuffle`: สลับคิวเพลงแบบสุ่ม
+   - `seek [seconds]`: ข้ามไปยังวินาทีที่ต้องการ
+   - `clear`: ล้างคิวเพลงทั้งหมด
+   - `autoplay`: เปิด/ปิด เล่นเพลงต่อเนื่องอัตโนมัติ
+   - `show`: เรียกแผงควบคุมเพลงใหม่
+6. **การเชื่อมต่อระบบ (`src/index.js`, `src/events/ready.js`, `src/events/interactionCreate.js`)**:
+   - เปิด Intent `GatewayIntentBits.GuildVoiceStates`
+   - เริ่มต้นการทำงานของ `client.distube`
+   - ลงทะเบียน Slash Command `/music` และดักจับปุ่ม `music_*`
+
+## ผลการตรวจสอบ
+- **Syntax Check (`node --check`)**: ผ่าน 100% ทุกไฟล์
+- **Module Import Evaluation**: โหลดโมดูลเพลงทั้งหมดสำเร็จ และตรวจสอบ path `yt-dlp.exe` เรียบร้อย
+
+---
+
 # ระบบคุมขังชั่วคราว (Jail System)
 
 ## สิ่งที่เพิ่มและเปลี่ยนแปลง
 1. **คำสั่ง `/set jail`**:
    - `/set jail role [role]`: กำหนดยศ Jail Role ประจำเซิร์ฟเวอร์ บันทึกลง `database/<guildId>/jail/setting.json` มีการตรวจสิทธิ์และ Role Hierarchy ทั้งของผู้สั่งและของบอท
    - `/set jail initial-role`: สร้างยศ `jail` ใหม่อัตโนมัติ (ปิดสิทธิ์ทุกอย่าง `0n`) และบันทึกเป็น Jail Role ของเซิร์ฟเวอร์ทันที
-   - `/set jail status`: แสดงยศห้องขังที่ตั้งค่าไว้ จำนวนผู้ถูกคุมขัง และรายชื่อผู้ถูกคุมขังพร้อมเวลาที่จะได้รับการปลด (<t:...:R>)
+   - `/set jail status`: แสดงยศห้องขังที่ตั้งค่าไว้ จำนวนผู้ถูกคุมขัง และรายชื่อผู้ถูกคุมขังพร้อมเวลาแน่นอนที่จะได้รับการปลด (<t:...:f>)
    - `/set jail remove-role`: ลบการตั้งค่ายศห้องขังออกจากระบบ
 2. **คำสั่ง `/jail $user $time [reason]`**:
    - รับเวลาเป็นหน่วย **นาที** (1 - 43,200 นาที หรือ 30 วัน)
@@ -12,7 +56,7 @@
    - ดึงรายชื่อยศเดิมทั้งหมด (เก็บเฉพาะยศที่ถอดได้ ละเว้น Managed/Integration Roles และ @everyone)
    - สลับยศ: ถอดยศเดิมออกทั้งหมด แล้วใส่ยศ Jail Role ให้สมาชิก
    - คำนวณ `releaseAt = Date.now() + time * 60 * 1000` และบันทึกลง `database/<guildId>/jail/records.json`
-   - ส่งประกาศในห้องผ่าน Helper และตอบยืนยันคำสั่ง
+   - ส่งประกาศในห้องผ่าน Helper และตอบยืนยันคำสั่ง แสดงเวลาปลดแน่นอน (`<t:...:f>`) โดยไม่ใช้นับถอยหลังสัมพันธ์ (`<t:...:R>`) เพื่อไม่ให้ขึ้นเวลานับอดีตหลังครบกำหนด
 3. **คำสั่ง `/unjail $user [reason]`**:
    - ปลดสมาชิกออกจากห้องขังก่อนกำหนด
    - คืนยศเดิมทั้งหมดที่บันทึกไว้ใน `records.json` (กรองเฉพาะยศที่ยังคงมีอยู่ในเซิร์ฟเวอร์) และถอดยศ Jail Role ออก

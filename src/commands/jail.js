@@ -124,7 +124,7 @@ export async function handleJailCommand(interaction) {
   if (records[targetUser.id]) {
     const existingRelease = Math.floor(records[targetUser.id].releaseAt / 1000);
     await respondToInteraction(interaction, {
-      content: `⚠️ สมาชิก <@${targetUser.id}> ถูกคุมขังอยู่แล้ว (กำหนดเวลาปลด: <t:${existingRelease}:R>) หากต้องการปลดออก กรุณาใช้คำสั่ง \`/unjail\` ค่ะ`,
+      content: `⚠️ สมาชิก <@${targetUser.id}> ถูกคุมขังอยู่แล้ว (กำหนดเวลาปลด: <t:${existingRelease}:f>) หากต้องการปลดออก กรุณาใช้คำสั่ง \`/unjail\` ค่ะ`,
       flags: MessageFlags.Ephemeral,
     });
     return;
@@ -167,7 +167,7 @@ export async function handleJailCommand(interaction) {
 
   // 8. ส่งข้อความแจ้งเตือน
   const releaseTimestamp = Math.floor(releaseAt / 1000);
-  const successContent = `🚨 ส่งสมาชิก <@${targetUser.id}> เข้าห้องขังเป็นเวลา **${minutes} นาที** เรียบร้อยแล้วค่ะ\n⏳ กำหนดเวลาปลด: <t:${releaseTimestamp}:F> (<t:${releaseTimestamp}:R>)\n📝 เหตุผล: ${reason}`;
+  const successContent = `🚨 ส่งสมาชิก <@${targetUser.id}> เข้าห้องขังเป็นเวลา **${minutes} นาที** เรียบร้อยแล้วค่ะ\n⏳ กำหนดเวลาปลด: <t:${releaseTimestamp}:f>\n📝 เหตุผล: ${reason}`;
 
   try {
     const publicMsg = await sendHelperMessage(

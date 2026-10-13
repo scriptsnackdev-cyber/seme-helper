@@ -71,7 +71,7 @@ export async function handleSetJailCommands(interaction) {
         .slice(0, 15)
         .map(([userId, item]) => {
           const releaseTimestamp = Math.floor(item.releaseAt / 1000);
-          return `• <@${userId}> — ปลด: <t:${releaseTimestamp}:R> (เหตุผล: ${item.reason || "ไม่ระบุ"})`;
+          return `• <@${userId}> — กำหนดเวลาปลด: <t:${releaseTimestamp}:f> (เหตุผล: ${item.reason || "ไม่ระบุ"})`;
         })
         .join("\n");
 

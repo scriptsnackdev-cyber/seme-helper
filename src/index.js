@@ -1,7 +1,12 @@
 import { errorSummary } from "./utils/helper.js";
 import { Client, GatewayIntentBits, Partials } from "discord.js";
 import "dotenv/config";
+import { DisTube } from "distube";
+import ffmpegStatic from "ffmpeg-static";
+import { YouTubePlugin } from "@distube/youtube";
 
+import { ytdlpPlugin } from "./utils/musicPlugin.js";
+import { setupDisTubeEvents } from "./handlers/disTubeHandler.js";
 import { registerSystemFonts } from "./utils/canvas.js";
 import { setupReadyEvent } from "./events/ready.js";
 import { setupGuildMemberAddEvent } from "./events/guildMemberAdd.js";
@@ -36,9 +41,21 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates,
   ],
   partials: [Partials.Message, Partials.Reaction, Partials.User],
 });
+
+// ติดตั้งระบบเครื่องเล่นเพลง DisTube + yt-dlp
+client.distube = new DisTube(client, {
+  ffmpeg: { path: ffmpegStatic || "ffmpeg" },
+  emitNewSongOnly: true,
+  plugins: [
+    ytdlpPlugin,
+    new YouTubePlugin(),
+  ],
+});
+setupDisTubeEvents(client);
 
 // 1. ลงทะเบียนฟอนต์ระบบการ์ด
 registerSystemFonts();

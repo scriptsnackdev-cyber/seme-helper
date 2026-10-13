@@ -751,6 +751,78 @@ export function getSlashCommandDefinitions() {
             .setMaxLength(500)
             .setRequired(false)
         ),
+
+      new SlashCommandBuilder()
+        .setName("music")
+        .setDescription("เครื่องเล่นเพลง YouTube คุณภาพสูง")
+        .addSubcommand((sub) =>
+          sub
+            .setName("play")
+            .setDescription("เล่นเพลงหรือเพิ่มเข้าคิว")
+            .addStringOption((opt) =>
+              opt.setName("query").setDescription("ชื่อเพลงหรือลิงก์ YouTube").setRequired(true)
+            )
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName("add")
+            .setDescription("เพิ่มเพลงเข้าคิว")
+            .addStringOption((opt) =>
+              opt.setName("query").setDescription("ชื่อเพลงหรือลิงก์ YouTube").setRequired(true)
+            )
+        )
+        .addSubcommand((sub) => sub.setName("queue").setDescription("ดูรายการคิวเพลงที่กำลังต่อแถวอยู่"))
+        .addSubcommand((sub) => sub.setName("nowplaying").setDescription("ดูรายละเอียดเพลงที่กำลังเล่นอยู่ตอนนี้"))
+        .addSubcommand((sub) => sub.setName("skip").setDescription("ข้ามเพลงปัจจุบัน"))
+        .addSubcommand((sub) => sub.setName("previous").setDescription("ย้อนกลับไปฟังเพลงก่อนหน้า"))
+        .addSubcommand((sub) => sub.setName("pause").setDescription("หยุดเพลงชั่วคราว"))
+        .addSubcommand((sub) => sub.setName("resume").setDescription("เล่นเพลงต่อ"))
+        .addSubcommand((sub) => sub.setName("leave").setDescription("สั่งให้บอทออกจากห้องเสียงและหยุดเล่น"))
+        .addSubcommand((sub) =>
+          sub
+            .setName("volume")
+            .setDescription("ปรับระดับความดังของเสียง (1-100)")
+            .addIntegerOption((opt) =>
+              opt
+                .setName("percent")
+                .setDescription("ระดับเสียง (1-100)")
+                .setRequired(true)
+                .setMinValue(1)
+                .setMaxValue(100)
+            )
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName("loop")
+            .setDescription("ตั้งค่าการเล่นวนซ้ำ")
+            .addStringOption((opt) =>
+              opt
+                .setName("mode")
+                .setDescription("โหมดการวนซ้ำ")
+                .setRequired(true)
+                .addChoices(
+                  { name: "ปิดการวนซ้ำ", value: "0" },
+                  { name: "วนซ้ำเพลงเดียว", value: "1" },
+                  { name: "วนซ้ำทั้งคิว", value: "2" }
+                )
+            )
+        )
+        .addSubcommand((sub) => sub.setName("shuffle").setDescription("สลับคิวเพลงแบบสุ่ม"))
+        .addSubcommand((sub) =>
+          sub
+            .setName("seek")
+            .setDescription("ข้ามไปยังวินาทีที่ต้องการ")
+            .addIntegerOption((opt) =>
+              opt
+                .setName("seconds")
+                .setDescription("ตำแหน่งวินาทีที่ต้องการ")
+                .setRequired(true)
+                .setMinValue(0)
+            )
+        )
+        .addSubcommand((sub) => sub.setName("clear").setDescription("ล้างคิวเพลงทั้งหมดที่ต่อแถวอยู่"))
+        .addSubcommand((sub) => sub.setName("autoplay").setDescription("เปิด/ปิด ระบบเล่นเพลงต่อเนื่องอัตโนมัติ"))
+        .addSubcommand((sub) => sub.setName("show").setDescription("เรียกแผงควบคุมเพลง (Control Panel) มาใหม่")),
   ].map((cmd) => cmd.toJSON());
 }
 

@@ -37,6 +37,7 @@ import { handleQuizCommand } from "../commands/quiz.js";
 import { handleImageCommand } from "../commands/image.js";
 import { handleHelperCommand } from "../commands/helper.js";
 import { handleRankCommand, handleLeaderboardCommand } from "../commands/rank.js";
+import { handleMusicCommand, handleMusicButtonInteraction } from "../commands/music.js";
 import { hasStaffPermission, assertRoleManageable } from "../utils/permission.js";
 import { sendHelperMessage, editHelperMessage, respondToInteraction, deferCommand, errorSummary } from "../utils/helper.js";
 
@@ -98,6 +99,13 @@ export function setupInteractionCreateEvent(client) {
       if (interaction.isChatInputCommand()) {
         await deferCommand(interaction);
       }
+
+      // 0. ปุ่มควบคุมเครื่องเล่นเพลง
+      if (interaction.isButton() && interaction.customId.startsWith("music_")) {
+        await handleMusicButtonInteraction(interaction);
+        return;
+      }
+
       // 1. ปุ่มรับยศทันที
       if (interaction.isButton() && interaction.customId.startsWith("claim_role_")) {
         const parts = interaction.customId.split("_");
@@ -647,6 +655,11 @@ export function setupInteractionCreateEvent(client) {
 
       if (commandName === "unjail") {
         await handleUnjailCommand(interaction);
+        return;
+      }
+
+      if (commandName === "music") {
+        await handleMusicCommand(interaction);
         return;
       }
 
