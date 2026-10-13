@@ -18,16 +18,47 @@ const YTDLP_PATH = isWindows
 console.log(`🎵 [Music] yt-dlp path: ${YTDLP_PATH} (System: ${process.platform})`);
 
 /**
+ * ดึง YouTube Cookie จาก .env หรือโฟลเดอร์ purrpaw-discord ข้างเคียง
+ */
+export function getYouTubeCookie() {
+  if (process.env.YOUTUBE_COOKIE) return process.env.YOUTUBE_COOKIE;
+
+  const candidatePaths = [
+    path.resolve(rootDir, "../purrpaw-discord/.env"),
+    "C:/Users/Chayanan/purrpaw-discord/.env",
+  ];
+
+  for (const envPath of candidatePaths) {
+    if (fs.existsSync(envPath)) {
+      try {
+        const content = fs.readFileSync(envPath, "utf-8");
+        const match = content.match(/YOUTUBE_COOKIE=["']?([^"'\r\n]+)["']?/);
+        if (match && match[1]) {
+          process.env.YOUTUBE_COOKIE = match[1];
+          return match[1];
+        }
+      } catch {}
+    }
+  }
+  return null;
+}
+
+const initialCookie = getYouTubeCookie();
+console.log(`🍪 [Music] YouTube Cookie: ${initialCookie ? "Found (Ready to bypass 403)" : "Not Found"}`);
+
+/**
  * ฟังก์ชันยิงคำสั่ง yt-dlp เพื่อสกัดข้อมูลและ Stream URL
  */
 export async function ytdlp(args, useCookie = true) {
   const finalArgs = [...args];
+  const cookie = useCookie ? getYouTubeCookie() : null;
+
   if (useCookie) {
     const cookiePath = path.join(rootDir, "cookies.txt");
     if (fs.existsSync(cookiePath)) {
       finalArgs.push("--cookies", cookiePath);
-    } else if (process.env.YOUTUBE_COOKIE) {
-      finalArgs.push("--add-header", `Cookie:${process.env.YOUTUBE_COOKIE}`);
+    } else if (cookie) {
+      finalArgs.push("--add-header", `Cookie:${cookie}`);
     }
   }
   finalArgs.push(
@@ -45,7 +76,7 @@ export async function ytdlp(args, useCookie = true) {
     });
     return JSON.parse(stdout);
   } catch (err) {
-    if (useCookie && process.env.YOUTUBE_COOKIE) return ytdlp(args, false);
+    if (useCookie && cookie) return ytdlp(args, false);
     throw err;
   }
 }
