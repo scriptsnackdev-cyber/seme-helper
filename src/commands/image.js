@@ -1,52 +1,33 @@
+import { respondToInteraction, deferCommand, errorSummary } from "../utils/helper.js";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
-import { AttachmentBuilder } from "discord.js";
+import { MessageFlags, AttachmentBuilder } from "discord.js";
 import { DATABASE_DIR, ensureGuildDatabase, getImageGalleryData, saveImageGalleryData } from "../utils/db.js";
 
 function sanitizeFolderName(name) {
   return name.replace(/[\/\\:\*\?"<>\|]/g, "_").replace(/\.\./g, "_").trim();
 }
 
-async function safeReply(interaction, payload) {
-  try {
-    if (interaction.deferred || interaction.replied) {
-      return await interaction.editReply(payload);
-    } else {
-      return await interaction.reply(payload);
-    }
-  } catch (err) {
-    if (err.code === 10062) return null;
-    console.error("❌ ไม่สามารถส่งข้อความตอบกลับ interaction ได้:", err);
-    return null;
-  }
-}
-
 export async function handleImageCommand(interaction) {
   const { guildId } = interaction;
   if (!guildId) {
-    await safeReply(interaction, { content: "❌ คำสั่งนี้ใช้ได้เฉพาะในเซิร์ฟเวอร์เท่านั้น", ephemeral: true });
+    await respondToInteraction(interaction, { content: "❌ คำสั่งนี้ใช้ได้เฉพาะในเซิร์ฟเวอร์เท่านั้น", flags: MessageFlags.Ephemeral });
     return;
   }
 
-  ensureGuildDatabase(guildId);
   const subcommand = interaction.options.getSubcommand();
+  await deferCommand(interaction, subcommand !== "view");
+  ensureGuildDatabase(guildId);
 
   if (subcommand === "add") {
-    try {
-      if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply({ ephemeral: true });
-      }
-    } catch (e) {
-      console.warn("⚠️ ไม่สามารถ deferReply ได้:", e.message);
-    }
 
-    const rawTitle = (interaction.options.getString("title") || interaction.options.getString("name") || "").trim();
+    const rawTitle = (interaction.options.getString("title") ?? "").trim();
     const categoryTitle = sanitizeFolderName(rawTitle);
     const blurOption = interaction.options.getBoolean("blur") ?? false;
 
     if (!categoryTitle) {
-      await safeReply(interaction, { content: "❌ กรุณาระบุชื่อหมวดหมู่ให้ถูกต้องค่ะ", ephemeral: true });
+      await respondToInteraction(interaction, { content: "❌ กรุณาระบุชื่อหมวดหมู่ให้ถูกต้องค่ะ", flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -62,7 +43,7 @@ export async function handleImageCommand(interaction) {
     }
 
     if (attachments.length === 0) {
-      await safeReply(interaction, { content: "❌ กรุณาแนบไฟล์รูปภาพอย่างน้อย 1 รูปค่ะ", ephemeral: true });
+      await respondToInteraction(interaction, { content: "❌ กรุณาแนบไฟล์รูปภาพอย่างน้อย 1 รูปค่ะ", flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -90,9 +71,14 @@ export async function handleImageCommand(interaction) {
           failCount++;
         }
       } catch (err) {
-        console.error(`❌ ไม่สามารถแปลงรูปภาพ ${att.name}:`, err);
+        console.error(`❌ ไม่สามารถแปลงรูปภาพ ${att.name}:`, errorSummary(err));
         failCount++;
       }
+    }
+
+    if (savedCount === 0) {
+      await respondToInteraction(interaction, { content: "บันทึกรูปไม่สำเร็จ ล้มเหลว " + failCount + " รูป กรุณาตรวจไฟล์แล้วลองใหม่" });
+      return;
     }
 
     // อัปเดตไฟล์ database/${guildId}/image/data.json
@@ -130,9 +116,9 @@ export async function handleImageCommand(interaction) {
     saveImageGalleryData(guildId, galleryData);
 
     const blurText = blurOption ? "\n🔒 เปิดใช้งาน Spoiler (เบลอรูปภาพ)" : "";
-    await safeReply(interaction, {
-      content: `✅ บันทึก **${categoryTitle}** เรียบร้อย\nจำนวน ${savedCount} รูป${blurText}`,
-      ephemeral: true,
+    await respondToInteraction(interaction, {
+      content: `Success: บันทึก **${categoryTitle}** จำนวน ${savedCount} รูป ล้มเหลว ${failCount} รูป${blurText}`,
+      flags: MessageFlags.Ephemeral,
     });
   } else if (subcommand === "list") {
     const galleryData = getImageGalleryData(guildId);
@@ -157,29 +143,31 @@ export async function handleImageCommand(interaction) {
     }
 
     if (categoryList.length === 0) {
-      await safeReply(interaction, { content: "📁 ยังไม่มีคลังรูปภาพในเซิร์ฟเวอร์นี้ค่ะ", ephemeral: true });
+      await respondToInteraction(interaction, { content: "📁 ยังไม่มีคลังรูปภาพในเซิร์ฟเวอร์นี้ค่ะ", flags: MessageFlags.Ephemeral });
       return;
     }
 
-    await safeReply(interaction, {
-      content: `🖼️ **รายการคลังรูปภาพทั้งหมดในเซิร์ฟเวอร์:**\n\n${categoryList.join("\n")}`,
-      ephemeral: true,
-    });
+    const content = "รายการคลังรูปภาพทั้งหมดในเซิร์ฟเวอร์:\n\n" + categoryList.join("\n");
+    const chunks = content.match(/[\s\S]{1,1900}/g);
+    if (!await respondToInteraction(interaction, { content: chunks[0] })) return;
+    for (const chunk of chunks.slice(1)) {
+      await interaction.followUp({ content: chunk, flags: MessageFlags.Ephemeral });
+    }
   } else if (subcommand === "delete") {
-    const rawTitle = (interaction.options.getString("title") || interaction.options.getString("name") || "").trim();
+    const rawTitle = (interaction.options.getString("title") ?? "").trim();
     const imageIndex = interaction.options.getInteger("index");
     const categoryTitle = sanitizeFolderName(rawTitle);
     const targetDir = path.join(DATABASE_DIR, guildId, "image", categoryTitle);
 
     if (!fs.existsSync(targetDir)) {
-      await safeReply(interaction, { content: `❌ ไม่พบคลังรูปภาพหมวดหมู่ **"${categoryTitle}"** ค่ะ`, ephemeral: true });
+      await respondToInteraction(interaction, { content: `❌ ไม่พบคลังรูปภาพหมวดหมู่ **"${categoryTitle}"** ค่ะ`, flags: MessageFlags.Ephemeral });
       return;
     }
 
     const files = fs.readdirSync(targetDir).filter((f) => f.endsWith(".webp") || f.endsWith(".png") || f.endsWith(".jpg") || f.endsWith(".gif"));
 
     if (files.length === 0) {
-      await safeReply(interaction, { content: `❌ ไม่พบรูปภาพในหมวดหมู่ **"${categoryTitle}"** ค่ะ`, ephemeral: true });
+      await respondToInteraction(interaction, { content: `❌ ไม่พบรูปภาพในหมวดหมู่ **"${categoryTitle}"** ค่ะ`, flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -188,9 +176,9 @@ export async function handleImageCommand(interaction) {
     // 1. กรณีระบุลำดับรูปภาพ (ลบเฉพาะรูปตาม index)
     if (imageIndex !== null && imageIndex !== undefined) {
       if (imageIndex < 1 || imageIndex > files.length) {
-        await safeReply(interaction, {
+        await respondToInteraction(interaction, {
           content: `❌ ไม่พบรูปภาพลำดับที่ **${imageIndex}** ค่ะ (หมวดหมู่นี้มีทั้งหมด **${files.length}** รูป กรุณาระบุลำดับระหว่าง 1 ถึง ${files.length})`,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -226,9 +214,9 @@ export async function handleImageCommand(interaction) {
       const remainingCount = files.length - 1;
       const remainText = remainingCount > 0 ? ` (ยังเหลืออีก ${remainingCount} รูปในหมวดหมู่นี้)` : ` (หมวดหมู่นี้ไม่มีรูปภาพเหลืออยู่แล้ว จึงลบหมวดหมู่ออกอัตโนมัติ)`;
 
-      await safeReply(interaction, {
+      await respondToInteraction(interaction, {
         content: `✅ ลบรูปภาพลำดับที่ **${imageIndex}** ออกจากหมวดหมู่ **"${categoryTitle}"** เรียบร้อยแล้วค่ะ${remainText}`,
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
       return;
     }
@@ -247,32 +235,25 @@ export async function handleImageCommand(interaction) {
     }
 
     if (deleted) {
-      await safeReply(interaction, { content: `✅ ลบคลังรูปภาพหมวดหมู่ **"${categoryTitle}"** (ทั้งหมด ${files.length} รูป) ออกเรียบร้อยแล้วค่ะ`, ephemeral: true });
+      await respondToInteraction(interaction, { content: `✅ ลบคลังรูปภาพหมวดหมู่ **"${categoryTitle}"** (ทั้งหมด ${files.length} รูป) ออกเรียบร้อยแล้วค่ะ`, flags: MessageFlags.Ephemeral });
     } else {
-      await safeReply(interaction, { content: `❌ ไม่พบคลังรูปภาพหมวดหมู่ **"${categoryTitle}"** ค่ะ`, ephemeral: true });
+      await respondToInteraction(interaction, { content: `❌ ไม่พบคลังรูปภาพหมวดหมู่ **"${categoryTitle}"** ค่ะ`, flags: MessageFlags.Ephemeral });
     }
   } else if (subcommand === "view") {
-    try {
-      if (!interaction.deferred && !interaction.replied) {
-        await interaction.deferReply();
-      }
-    } catch (e) {
-      console.warn("⚠️ ไม่สามารถ deferReply ได้:", e.message);
-    }
 
-    const rawTitle = (interaction.options.getString("title") || interaction.options.getString("name") || "").trim();
+    const rawTitle = (interaction.options.getString("title") ?? "").trim();
     const categoryTitle = sanitizeFolderName(rawTitle);
     const targetDir = path.join(DATABASE_DIR, guildId, "image", categoryTitle);
 
     if (!fs.existsSync(targetDir)) {
-      await safeReply(interaction, { content: `❌ ไม่พบคลังรูปภาพหมวดหมู่ **"${categoryTitle}"** ค่ะ` });
+      await respondToInteraction(interaction, { content: `❌ ไม่พบคลังรูปภาพหมวดหมู่ **"${categoryTitle}"** ค่ะ` });
       return;
     }
 
     const files = fs.readdirSync(targetDir).filter((f) => f.endsWith(".webp") || f.endsWith(".png") || f.endsWith(".jpg") || f.endsWith(".gif"));
 
     if (files.length === 0) {
-      await safeReply(interaction, { content: `❌ ไม่พบรูปภาพในหมวดหมู่ **"${categoryTitle}"** ค่ะ` });
+      await respondToInteraction(interaction, { content: `❌ ไม่พบรูปภาพในหมวดหมู่ **"${categoryTitle}"** ค่ะ` });
       return;
     }
 
@@ -290,11 +271,12 @@ export async function handleImageCommand(interaction) {
     });
 
     const blurLabel = isBlur ? " 🔞 (Spoiler)" : "";
-    await safeReply(interaction, {
+    const firstReply = await respondToInteraction(interaction, {
       content: `🖼️ **รูปภาพในคลัง "${categoryTitle}" (ทั้งหมด ${files.length} รูป):**${blurLabel}\n*💡 คำแนะนำ: หากต้องการลบเฉพาะรูป สามารถใช้คำสั่ง \`/image delete title:${categoryTitle} index:<ลำดับรูป>\` ได้ค่ะ*`,
       files: attachments,
     });
 
+    if (!firstReply) return;
     if (files.length > 10) {
       for (let i = 10; i < files.length; i += 10) {
         const chunk = files.slice(i, i + 10);
@@ -305,7 +287,7 @@ export async function handleImageCommand(interaction) {
           return builder;
         });
         await interaction.followUp({ files: nextAttachments }).catch((err) => {
-          console.error("❌ ไม่สามารถส่งรูปภาพเพิ่มเติมได้:", err);
+          console.error("❌ ไม่สามารถส่งรูปภาพเพิ่มเติมได้:", errorSummary(err));
         });
       }
     }

@@ -5,6 +5,8 @@ export const DATABASE_DIR = "./database";
 export const SERVER_LIST_FILE = "./serverlist.json";
 export const LEVELING_CONFIG_FILE = "./leveling.json";
 
+const reactionRoleSettings = new Map();
+
 // ฟังก์ชันสร้างหรืออ่านไฟล์ JSON ศูนย์กลางพร้อมค่าเริ่มต้น
 export function readJson(filePath, defaultValue = {}) {
   if (!fs.existsSync(filePath)) {
@@ -325,5 +327,30 @@ export function getIntroBannerPath(guildId) {
   if (fs.existsSync(gifPath)) return { path: gifPath, filename: "banner.gif" };
   if (fs.existsSync(webpPath)) return { path: webpPath, filename: "banner.webp" };
   return null;
+}
+
+// Reaction Role configuration is loaded once per guild, including after restart.
+export function getReactionRoleSettings(guildId) {
+  if (!reactionRoleSettings.has(guildId)) {
+    const filePath = path.join(DATABASE_DIR, guildId, "reaction-roles.json");
+    const settings = fs.existsSync(filePath) ? readJson(filePath, null) : {};
+    if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+      throw new Error("ไฟล์ตั้งค่า Reaction Roles ไม่ถูกต้อง กรุณาตรวจสอบไฟล์ก่อนสร้างรายการใหม่");
+    }
+    reactionRoleSettings.set(guildId, settings);
+  }
+  return reactionRoleSettings.get(guildId);
+}
+
+export function saveReactionRoleSettings(guildId, settings) {
+  const filePath = path.join(DATABASE_DIR, guildId, "reaction-roles.json");
+  const temporaryPath = `${filePath}.tmp`;
+  try {
+    writeJson(temporaryPath, settings);
+    fs.renameSync(temporaryPath, filePath);
+  } finally {
+    if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
+  }
+  reactionRoleSettings.set(guildId, settings);
 }
 

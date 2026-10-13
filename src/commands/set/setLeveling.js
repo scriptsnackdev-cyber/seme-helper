@@ -1,3 +1,5 @@
+import { MessageFlags } from "discord.js";
+import { respondToInteraction, deferCommand } from "../../utils/helper.js";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
@@ -20,12 +22,12 @@ export async function handleSetLevelingCommands(interaction) {
 
     const statusText = enabled ? "เปิดใช้งาน (Enable) 🟢" : "ปิดใช้งาน (Disable) 🔴";
     const channelText = channel ? `<#${channel.id}>` : "ช่องที่สมาชิกพิมพ์คุย";
-    await interaction.reply({
+    await respondToInteraction(interaction, {
       content: `✅ ตั้งค่าสถานะระบบ Level Up เรียบร้อยแล้ว!\n• **สถานะ:** ${statusText}\n• **ช่องแจ้งเตือน:** ${channelText}`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   } else if (subcommand === "image" || subcommand === "banner") {
-    await interaction.deferReply({ ephemeral: true });
+    await deferCommand(interaction);
     const bannerAttachment = interaction.options.getAttachment("image");
 
     const bannerPngPath = path.join(DATABASE_DIR, guildId, "leveling", "banner.png");
@@ -41,7 +43,7 @@ export async function handleSetLevelingCommands(interaction) {
     const isVideo = contentType.startsWith("video/") || fileName.endsWith(".mp4") || fileName.endsWith(".mov") || fileName.endsWith(".webm");
 
     if (isVideo) {
-      await interaction.editReply({
+      await respondToInteraction(interaction, {
         content: "⚠️ ระบบแบนเนอร์ Level Up รองรับเฉพาะไฟล์รูปภาพ (PNG, JPG, WEBP) เท่านั้นครับ (ไม่รองรับวิดีโอ MOV/MP4)",
       });
       return;
@@ -54,14 +56,14 @@ export async function handleSetLevelingCommands(interaction) {
     });
 
     if (!res.ok) {
-      await interaction.editReply({ content: "❌ ไม่สามารถดาวน์โหลดรูปภาพได้" });
+      await respondToInteraction(interaction, { content: "❌ ไม่สามารถดาวน์โหลดรูปภาพได้" });
       return;
     }
 
     const buffer = Buffer.from(await res.arrayBuffer());
     await sharp(buffer, { animated: false }).webp({ quality: 90 }).toFile(bannerWebpPath);
 
-    await interaction.editReply({
+    await respondToInteraction(interaction, {
       content: "✅ บันทึกรูปภาพแบนเนอร์ประจำการ์ด Level Up เรียบร้อยแล้ว! (แปลงเป็นไฟล์ภาพ WebP ประหยัดพื้นที่เรียบร้อย)",
     });
   } else if (subcommand === "remove-image" || subcommand === "remove-banner") {
@@ -75,9 +77,9 @@ export async function handleSetLevelingCommands(interaction) {
     if (fs.existsSync(bannerWebpPath)) { fs.unlinkSync(bannerWebpPath); deleted = true; }
 
     if (deleted) {
-      await interaction.reply({ content: "✅ ลบรูปภาพแบนเนอร์ Level Up ออกเรียบร้อยแล้ว", ephemeral: true });
+      await respondToInteraction(interaction, { content: "✅ ลบรูปภาพแบนเนอร์ Level Up ออกเรียบร้อยแล้ว", flags: MessageFlags.Ephemeral });
     } else {
-      await interaction.reply({ content: "⚠️ เซิร์ฟเวอร์นี้ยังไม่ได้ตั้งค่ารูปภาพแบนเนอร์ Level Up", ephemeral: true });
+      await respondToInteraction(interaction, { content: "⚠️ เซิร์ฟเวอร์นี้ยังไม่ได้ตั้งค่ารูปภาพแบนเนอร์ Level Up", flags: MessageFlags.Ephemeral });
     }
   }
 }

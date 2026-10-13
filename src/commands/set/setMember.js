@@ -14,14 +14,14 @@ import {
   getMemberFormBannerPath,
 } from "../../utils/db.js";
 import { convertMp4ToGif, downloadAndConvertToGif } from "../../utils/canvas.js";
-import { sendHelperMessage } from "../../utils/helper.js";
+import { sendHelperMessage, respondToInteraction, deferCommand } from "../../utils/helper.js";
 
 export async function handleSetMemberCommands(interaction) {
   const { guildId } = interaction;
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === "setup") {
-    await interaction.deferReply({ ephemeral: true });
+    await deferCommand(interaction);
 
     const title = interaction.options.getString("title");
     const description = interaction.options.getString("description");
@@ -80,9 +80,9 @@ export async function handleSetMemberCommands(interaction) {
     sendOptions.components = [row];
 
     await sendHelperMessage(interaction.channel, sendOptions, guildId);
-    await interaction.editReply({ content: "✅ สร้างและส่งข้อความยืนยันสิทธิ์สมาชิกเรียบร้อยแล้ว!" });
+    await respondToInteraction(interaction, { content: "✅ สร้างและส่งข้อความยืนยันสิทธิ์สมาชิกเรียบร้อยแล้ว!" });
   } else if (subcommand === "form-setup") {
-    await interaction.deferReply({ ephemeral: true });
+    await deferCommand(interaction);
 
     const title = interaction.options.getString("title");
     const description = interaction.options.getString("description");
@@ -158,6 +158,6 @@ export async function handleSetMemberCommands(interaction) {
 
     await sendHelperMessage(interaction.channel, sendOptions, guildId);
     const announceText = announceChannel ? ` และจะส่งข้อความประกาศต้อนรับที่ห้อง <#${announceChannel.id}> เมื่ออนุมัติ` : "";
-    await interaction.editReply({ content: `✅ สร้างและส่งฟอร์มคัดกรองสมาชิกเรียบร้อยแล้ว! คำตอบจะถูกส่งไปที่ห้อง <#${logChannel.id}> ให้ทีมงานอนุมัติ${announceText}ค่ะ` });
+    await respondToInteraction(interaction, { content: `✅ สร้างและส่งฟอร์มคัดกรองสมาชิกเรียบร้อยแล้ว! คำตอบจะถูกส่งไปที่ห้อง <#${logChannel.id}> ให้ทีมงานอนุมัติ${announceText}ค่ะ` });
   }
 }

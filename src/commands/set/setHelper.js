@@ -1,7 +1,8 @@
+import { respondToInteraction, deferCommand, errorSummary } from "../../utils/helper.js";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
-import { EmbedBuilder } from "discord.js";
+import { MessageFlags, EmbedBuilder } from "discord.js";
 import { DATABASE_DIR, ensureGuildDatabase, getHelperSettings, saveHelperSettings, getHelperAvatarPath } from "../../utils/db.js";
 
 export async function handleSetHelperCommands(interaction) {
@@ -9,7 +10,7 @@ export async function handleSetHelperCommands(interaction) {
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === "setup") {
-    await interaction.deferReply({ ephemeral: true });
+    await deferCommand(interaction);
 
     const name = interaction.options.getString("name");
     const imageAttachment = interaction.options.getAttachment("image");
@@ -30,7 +31,7 @@ export async function handleSetHelperCommands(interaction) {
           avatarUrl = imageAttachment.url;
         }
       } catch (err) {
-        console.error("❌ ไม่สามารถบันทึกรูปโปรไฟล์ผู้ช่วยได้:", err);
+        console.error("❌ ไม่สามารถบันทึกรูปโปรไฟล์ผู้ช่วยได้:", errorSummary(err));
       }
     } else if (imageUrl) {
       avatarUrl = imageUrl.trim();
@@ -43,7 +44,7 @@ export async function handleSetHelperCommands(interaction) {
           await sharp(buffer).png().toFile(localAvatarPath);
         }
       } catch (err) {
-        console.warn("⚠️ ไม่สามารถโหลดรูปจาก URL มาเซฟในเครื่องได้:", err.message);
+        console.warn("⚠️ ไม่สามารถโหลดรูปจาก URL มาเซฟในเครื่องได้:", errorSummary(err));
       }
     }
 
@@ -72,7 +73,7 @@ export async function handleSetHelperCommands(interaction) {
       embed.setThumbnail(avatarUrl);
     }
 
-    await interaction.editReply({ embeds: [embed] });
+    await respondToInteraction(interaction, { embeds: [embed] });
   } else if (subcommand === "status") {
     const settings = getHelperSettings(guildId);
 
@@ -90,7 +91,7 @@ export async function handleSetHelperCommands(interaction) {
       embed.setThumbnail(settings.avatar);
     }
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await respondToInteraction(interaction, { embeds: [embed], flags: MessageFlags.Ephemeral });
   } else if (subcommand === "reset") {
     saveHelperSettings(guildId, {
       enabled: false,
@@ -98,9 +99,9 @@ export async function handleSetHelperCommands(interaction) {
       avatar: null,
     });
 
-    await interaction.reply({
+    await respondToInteraction(interaction, {
       content: "🔄 รีเซ็ตการตั้งค่าบอทผู้ช่วยเรียบร้อยแล้วค่ะ บอทจะกลับมาใช้ชื่อและรูปโปรไฟล์เริ่มต้นของบอทตามปกติค่ะ",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   }
 }

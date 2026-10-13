@@ -1,6 +1,6 @@
 import { AttachmentBuilder } from "discord.js";
 import { getWelcomeSettings, getBannerPath } from "../utils/db.js";
-import { sendHelperMessage } from "../utils/helper.js";
+import { sendHelperMessage, errorSummary } from "../utils/helper.js";
 
 export function setupGuildMemberAddEvent(client) {
   client.on("guildMemberAdd", async (member) => {
@@ -16,7 +16,7 @@ export function setupGuildMemberAddEvent(client) {
             console.log(`✅ [Auto Role] มอบยศ ${role.name} ให้กับ ${member.user.tag} ในเซิร์ฟเวอร์ ${member.guild.name} เรียบร้อยแล้ว`);
           }
         } catch (err) {
-          console.error(`❌ [Auto Role Error] ไม่สามารถแจกยศให้ ${member.user.tag}:`, err);
+          console.error(`❌ [Auto Role Error] ไม่สามารถแจกยศให้ ${member.user.tag}:`, errorSummary(err));
         }
       }
 
@@ -42,7 +42,7 @@ export function setupGuildMemberAddEvent(client) {
       await sendHelperMessage(channel, sendOptions, member.guild.id);
       console.log(`🐾 [Welcome] ส่งข้อความต้อนรับให้ ${member.user.tag} ในห้อง #${channel.name} สำเร็จ`);
     } catch (err) {
-      console.error("❌ เกิดข้อผิดพลาดในระบบต้อนรับสมาชิกใหม่:", err);
+      console.error("❌ เกิดข้อผิดพลาดในระบบต้อนรับสมาชิกใหม่:", errorSummary(err));
     }
   });
 }

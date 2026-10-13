@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { AttachmentBuilder, EmbedBuilder } from "discord.js";
+import { MessageFlags, AttachmentBuilder, EmbedBuilder } from "discord.js";
 import {
   DATABASE_DIR,
   getIntroSettings,
@@ -8,7 +8,7 @@ import {
   getIntroBannerPath,
 } from "../../utils/db.js";
 import { convertMp4ToGif, downloadAndConvertToGif } from "../../utils/canvas.js";
-import { sendHelperMessage } from "../../utils/helper.js";
+import { sendHelperMessage, respondToInteraction, deferCommand, errorSummary } from "../../utils/helper.js";
 
 /**
  * ส่งข้อความ Sticky Template ไปยังห้องแนะนำตัว พร้อมลบข้อความเดิมออก
@@ -52,18 +52,19 @@ export async function postIntroStickyMessage(guild, introSettings) {
       return sentMessage;
     }
   } catch (err) {
-    console.error("❌ [Intro Sticky] เกิดข้อผิดพลาดในการส่งข้อความเทมเพลต:", err);
+    console.error("❌ [Intro Sticky] เกิดข้อผิดพลาดในการส่งข้อความเทมเพลต:", errorSummary(err));
   }
   return null;
 }
 
 export async function handleSetIntroCommands(interaction) {
+  await deferCommand(interaction);
   const { guildId, guild } = interaction;
   const subcommand = interaction.options.getSubcommand();
   const introSettings = getIntroSettings(guildId);
+  let stickyFailed = false;
 
   if (subcommand === "setup") {
-    await interaction.deferReply({ ephemeral: true });
 
     const channel = interaction.options.getChannel("channel");
     const messageText = interaction.options.getString("message");
@@ -97,10 +98,10 @@ export async function handleSetIntroCommands(interaction) {
     saveIntroSettings(guildId, introSettings);
 
     // ส่งข้อความ Sticky แรกเริ่มลงห้อง
-    await postIntroStickyMessage(guild, introSettings);
+    stickyFailed = !await postIntroStickyMessage(guild, introSettings);
 
-    await interaction.editReply({
-      content: `✅ ตั้งค่าระบบเทมเพลตแนะนำตัวในห้อง **#${channel.name}** (<#${channel.id}>) เรียบร้อยแล้ว!\nบอทจะคอยปักเทมเพลตนี้ต่อท้ายทุกครั้งที่มีคนแนะนำตัวค่ะ`,
+    await respondToInteraction(interaction, {
+      content: (`✅ ตั้งค่าระบบเทมเพลตแนะนำตัวในห้อง **#${channel.name}** (<#${channel.id}>) เรียบร้อยแล้ว!\nบอทจะคอยปักเทมเพลตนี้ต่อท้ายทุกครั้งที่มีคนแนะนำตัวค่ะ`) + (stickyFailed ? "\nบันทึกการตั้งค่าแล้ว แต่ส่ง Sticky ไม่สำเร็จ กรุณาตรวจสิทธิ์ห้อง" : ""),
     });
   } else if (subcommand === "message") {
     const text = interaction.options.getString("text");
@@ -109,12 +110,12 @@ export async function handleSetIntroCommands(interaction) {
 
     // อัปเดตข้อความในห้องทันทีถ้าเปิดใช้งานอยู่
     if (introSettings.enabled && introSettings.channelId) {
-      await postIntroStickyMessage(guild, introSettings);
+      stickyFailed = !await postIntroStickyMessage(guild, introSettings);
     }
 
-    await interaction.reply({
-      content: `✅ อัปเดตข้อความเทมเพลตแนะนำตัวใหม่เรียบร้อยแล้ว:\n\`\`\`\n${text}\n\`\`\``,
-      ephemeral: true,
+    await respondToInteraction(interaction, {
+      content: (`✅ อัปเดตข้อความเทมเพลตแนะนำตัวใหม่เรียบร้อยแล้ว:\n\`\`\`\n${text}\n\`\`\``) + (stickyFailed ? "\nบันทึกการตั้งค่าแล้ว แต่ส่ง Sticky ไม่สำเร็จ กรุณาตรวจสิทธิ์ห้อง" : ""),
+      flags: MessageFlags.Ephemeral,
     });
   } else if (subcommand === "channel") {
     const channel = interaction.options.getChannel("channel");
@@ -124,15 +125,15 @@ export async function handleSetIntroCommands(interaction) {
 
     // ส่งเทมเพลตไปยังห้องใหม่
     if (introSettings.enabled && introSettings.message) {
-      await postIntroStickyMessage(guild, introSettings);
+      stickyFailed = !await postIntroStickyMessage(guild, introSettings);
     }
 
-    await interaction.reply({
-      content: `✅ เปลี่ยนห้องเทมเพลตแนะนำตัวเป็น **#${channel.name}** (<#${channel.id}>) เรียบร้อยแล้วค่ะ`,
-      ephemeral: true,
+    await respondToInteraction(interaction, {
+      content: (`✅ เปลี่ยนห้องเทมเพลตแนะนำตัวเป็น **#${channel.name}** (<#${channel.id}>) เรียบร้อยแล้วค่ะ`) + (stickyFailed ? "\nบันทึกการตั้งค่าแล้ว แต่ส่ง Sticky ไม่สำเร็จ กรุณาตรวจสิทธิ์ห้อง" : ""),
+      flags: MessageFlags.Ephemeral,
     });
   } else if (subcommand === "banner") {
-    await interaction.deferReply({ ephemeral: true });
+    await deferCommand(interaction);
     const bannerAttachment = interaction.options.getAttachment("image");
     const bannerGifPath = path.join(DATABASE_DIR, guildId, "intro", "banner.gif");
     const bannerWebpPath = path.join(DATABASE_DIR, guildId, "intro", "banner.webp");
@@ -153,10 +154,10 @@ export async function handleSetIntroCommands(interaction) {
     }
 
     if (introSettings.enabled && introSettings.channelId && introSettings.message) {
-      await postIntroStickyMessage(guild, introSettings);
+      stickyFailed = !await postIntroStickyMessage(guild, introSettings);
     }
 
-    await interaction.editReply({ content: "✅ อัปเดตรูปภาพหรือวิดีโอแบนเนอร์เทมเพลตแนะนำตัวเรียบร้อยแล้ว!" });
+    await respondToInteraction(interaction, { content: "อัปเดตแบนเนอร์เรียบร้อยแล้ว" + (stickyFailed ? " แต่ส่ง Sticky ไม่สำเร็จ กรุณาตรวจสิทธิ์ห้อง" : "") });
   } else if (subcommand === "remove-banner") {
     const bannerGifPath = path.join(DATABASE_DIR, guildId, "intro", "banner.gif");
     const bannerWebpPath = path.join(DATABASE_DIR, guildId, "intro", "banner.webp");
@@ -167,23 +168,23 @@ export async function handleSetIntroCommands(interaction) {
 
     if (deleted) {
       if (introSettings.enabled && introSettings.channelId && introSettings.message) {
-        await postIntroStickyMessage(guild, introSettings);
+        stickyFailed = !await postIntroStickyMessage(guild, introSettings);
       }
-      await interaction.reply({ content: "✅ ลบแบนเนอร์ของเทมเพลตแนะนำตัวเรียบร้อยแล้วค่ะ", ephemeral: true });
+      await respondToInteraction(interaction, { content: ("✅ ลบแบนเนอร์ของเทมเพลตแนะนำตัวเรียบร้อยแล้วค่ะ") + (stickyFailed ? "\nบันทึกการตั้งค่าแล้ว แต่ส่ง Sticky ไม่สำเร็จ กรุณาตรวจสิทธิ์ห้อง" : ""), flags: MessageFlags.Ephemeral });
     } else {
-      await interaction.reply({ content: "⚠️ ยังไม่มีการตั้งค่าแบนเนอร์ไว้ค่ะ", ephemeral: true });
+      await respondToInteraction(interaction, { content: "ยังไม่มีการตั้งค่าแบนเนอร์ไว้ค่ะ", flags: MessageFlags.Ephemeral });
     }
   } else if (subcommand === "enable") {
     introSettings.enabled = true;
     saveIntroSettings(guildId, introSettings);
     if (introSettings.channelId && introSettings.message) {
-      await postIntroStickyMessage(guild, introSettings);
+      stickyFailed = !await postIntroStickyMessage(guild, introSettings);
     }
-    await interaction.reply({ content: "🟢 เปิดใช้งานระบบเทมเพลตแนะนำตัวเรียบร้อยแล้วค่ะ!", ephemeral: true });
+    await respondToInteraction(interaction, { content: ("🟢 เปิดใช้งานระบบเทมเพลตแนะนำตัวเรียบร้อยแล้วค่ะ!") + (stickyFailed ? "\nบันทึกการตั้งค่าแล้ว แต่ส่ง Sticky ไม่สำเร็จ กรุณาตรวจสิทธิ์ห้อง" : ""), flags: MessageFlags.Ephemeral });
   } else if (subcommand === "disable") {
     introSettings.enabled = false;
     saveIntroSettings(guildId, introSettings);
-    await interaction.reply({ content: "🔴 ปิดใช้งานระบบเทมเพลตแนะนำตัวเรียบร้อยแล้วค่ะ", ephemeral: true });
+    await respondToInteraction(interaction, { content: "ปิดใช้งานระบบเทมเพลตแนะนำตัวเรียบร้อยแล้วค่ะ", flags: MessageFlags.Ephemeral });
   } else if (subcommand === "status") {
     const bannerInfo = getIntroBannerPath(guildId);
     const embed = new EmbedBuilder()
@@ -198,6 +199,6 @@ export async function handleSetIntroCommands(interaction) {
       .setFooter({ text: "ระบบ Sticky Intro Template" })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await respondToInteraction(interaction, { embeds: [embed], flags: MessageFlags.Ephemeral });
   }
 }

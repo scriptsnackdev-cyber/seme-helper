@@ -1,5 +1,19 @@
 import { PermissionFlagsBits } from "discord.js";
 
+export async function assertRoleManageable(guild, role) {
+  if (!role) throw new Error("ไม่พบยศที่ตั้งค่าไว้ กรุณาตั้งค่ายศใหม่");
+  if (role.managed || role.id === guild.id) {
+    throw new Error("ไม่สามารถจัดการยศของระบบหรือ @everyone ได้");
+  }
+  const botMember = guild.members.me ?? await guild.members.fetchMe();
+  if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    throw new Error("บอทไม่มีสิทธิ์ Manage Roles กรุณาให้ผู้ดูแลปรับสิทธิ์บอท");
+  }
+  if (botMember.roles.highest.comparePositionTo(role) <= 0) {
+    throw new Error(`ยศ ${role.name} อยู่สูงกว่าหรือเท่ากับยศบอท กรุณาย้ายยศบอทให้สูงกว่า`);
+  }
+}
+
 /**
  * ตรวจสอบสิทธิ์ทีมงาน/แอดมินสำหรับใช้งานคำสั่งทั่วไป
  * - เจ้าของเซิร์ฟเวอร์ (Server Owner) อนุญาตเสมอ

@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import {
+  MessageFlags,
   EmbedBuilder,
   AttachmentBuilder,
   ButtonBuilder,
@@ -14,12 +15,12 @@ import {
   getQuizHeaderBannerPath,
 } from "../utils/db.js";
 import { convertMp4ToGif, downloadAndConvertToGif } from "../utils/canvas.js";
-import { sendHelperMessage } from "../utils/helper.js";
+import { sendHelperMessage, respondToInteraction, deferCommand } from "../utils/helper.js";
 
 export async function handleQuizCommand(interaction) {
   const { guildId } = interaction;
   if (!guildId) {
-    await interaction.reply({ content: "❌ คำสั่งนี้ใช้ได้เฉพาะในเซิร์ฟเวอร์เท่านั้น", ephemeral: true });
+    await respondToInteraction(interaction, { content: "❌ คำสั่งนี้ใช้ได้เฉพาะในเซิร์ฟเวอร์เท่านั้น", flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -27,7 +28,7 @@ export async function handleQuizCommand(interaction) {
   const config = getQuizConfig(guildId);
 
   if (subcommand === "add-result") {
-    await interaction.deferReply({ ephemeral: true });
+    await deferCommand(interaction);
 
     const title = interaction.options.getString("title").trim();
     const role = interaction.options.getRole("role");
@@ -74,7 +75,7 @@ export async function handleQuizCommand(interaction) {
       }
     }
 
-    await interaction.editReply({
+    await respondToInteraction(interaction, {
       content: `✅ เพิ่ม/แก้ไข ผลลัพธ์ **"${title}"** สำหรับแจกยศ **${role.name}** เรียบร้อยแล้วค่ะ!`,
     });
   } else if (subcommand === "add-question") {
@@ -108,12 +109,12 @@ export async function handleQuizCommand(interaction) {
 
     saveQuizConfig(guildId, config);
 
-    await interaction.reply({
+    await respondToInteraction(interaction, {
       content: `✅ เพิ่มคำถามข้อที่ **${config.questions.length}** เรียบร้อยแล้วค่ะ!\n📝 **คำถาม:** ${text}`,
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   } else if (subcommand === "setup") {
-    await interaction.deferReply({ ephemeral: true });
+    await deferCommand(interaction);
 
     const title = interaction.options.getString("title") || config.title || "แบบทดสอบวัดระดับยศ";
     const description = interaction.options.getString("description") || config.description || "กดปุ่มด้านล่างเพื่อเริ่มทำแบบทดสอบและวัดยศของคุณ!";
@@ -173,17 +174,17 @@ export async function handleQuizCommand(interaction) {
     sendOptions.components = [row];
 
     await sendHelperMessage(interaction.channel, sendOptions, guildId);
-    await interaction.editReply({ content: "✅ สร้างและส่งแบบทดสอบ Interactive Quiz ลงในช่องนี้เรียบร้อยแล้วค่ะ!" });
+    await respondToInteraction(interaction, { content: "✅ สร้างและส่งแบบทดสอบ Interactive Quiz ลงในช่องนี้เรียบร้อยแล้วค่ะ!" });
   } else if (subcommand === "delete-result") {
     const title = interaction.options.getString("title").trim();
     if (!config.results || config.results.length === 0) {
-      await interaction.reply({ content: "⚠️ ยังไม่มีผลลัพธ์ยศในระบบค่ะ", ephemeral: true });
+      await respondToInteraction(interaction, { content: "⚠️ ยังไม่มีผลลัพธ์ยศในระบบค่ะ", flags: MessageFlags.Ephemeral });
       return;
     }
 
     const index = config.results.findIndex((r) => r.id === title || r.title === title);
     if (index === -1) {
-      await interaction.reply({ content: `❌ ไม่พบผลลัพธ์ชื่อ **"${title}"** ในระบบค่ะ`, ephemeral: true });
+      await respondToInteraction(interaction, { content: `❌ ไม่พบผลลัพธ์ชื่อ **"${title}"** ในระบบค่ะ`, flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -196,22 +197,22 @@ export async function handleQuizCommand(interaction) {
     if (fs.existsSync(gifPath)) fs.unlinkSync(gifPath);
     if (fs.existsSync(webpPath)) fs.unlinkSync(webpPath);
 
-    await interaction.reply({ content: `✅ ลบผลลัพธ์ **"${title}"** ออกจากระบบเรียบร้อยแล้วค่ะ`, ephemeral: true });
+    await respondToInteraction(interaction, { content: `✅ ลบผลลัพธ์ **"${title}"** ออกจากระบบเรียบร้อยแล้วค่ะ`, flags: MessageFlags.Ephemeral });
   } else if (subcommand === "delete-question") {
     const index = interaction.options.getInteger("index") - 1;
     if (!config.questions || config.questions.length === 0) {
-      await interaction.reply({ content: "⚠️ ยังไม่มีข้อคำถามในระบบค่ะ", ephemeral: true });
+      await respondToInteraction(interaction, { content: "⚠️ ยังไม่มีข้อคำถามในระบบค่ะ", flags: MessageFlags.Ephemeral });
       return;
     }
 
     if (index < 0 || index >= config.questions.length) {
-      await interaction.reply({ content: `❌ ไม่พบข้อคำถามลำดับที่ **${index + 1}** ค่ะ`, ephemeral: true });
+      await respondToInteraction(interaction, { content: `❌ ไม่พบข้อคำถามลำดับที่ **${index + 1}** ค่ะ`, flags: MessageFlags.Ephemeral });
       return;
     }
 
     const removed = config.questions.splice(index, 1);
     saveQuizConfig(guildId, config);
 
-    await interaction.reply({ content: `✅ ลบคำถามข้อที่ **${index + 1}** ("${removed[0].text}") ออกจากระบบเรียบร้อยแล้วค่ะ`, ephemeral: true });
+    await respondToInteraction(interaction, { content: `✅ ลบคำถามข้อที่ **${index + 1}** ("${removed[0].text}") ออกจากระบบเรียบร้อยแล้วค่ะ`, flags: MessageFlags.Ephemeral });
   }
 }

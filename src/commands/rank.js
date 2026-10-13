@@ -1,4 +1,5 @@
-import { AttachmentBuilder, EmbedBuilder } from "discord.js";
+import { respondToInteraction, deferCommand, errorSummary } from "../utils/helper.js";
+import { MessageFlags, AttachmentBuilder, EmbedBuilder } from "discord.js";
 import {
   getLevelingSettings,
   getLevelingUserData,
@@ -10,11 +11,11 @@ import { generateRankCard } from "../utils/canvas.js";
 export async function handleRankCommand(interaction) {
   const { guild, guildId } = interaction;
   if (!guildId) {
-    await interaction.reply({ content: "❌ คำสั่งนี้ใช้ได้เฉพาะในเซิร์ฟเวอร์เท่านั้น", ephemeral: true });
+    await respondToInteraction(interaction, { content: "❌ คำสั่งนี้ใช้ได้เฉพาะในเซิร์ฟเวอร์เท่านั้น", flags: MessageFlags.Ephemeral });
     return;
   }
 
-  await interaction.deferReply();
+  await deferCommand(interaction, false);
 
   const targetUser = interaction.options.getUser("user") || interaction.user;
   const levelingSettings = getLevelingSettings(guildId);
@@ -59,13 +60,13 @@ export async function handleRankCommand(interaction) {
       replyNotice = "*หมายเหตุ: ระบบสะสมเลเวลในเซิร์ฟเวอร์นี้กำลังปิดใช้งานอยู่ค่ะ*\n";
     }
 
-    await interaction.editReply({
+    await respondToInteraction(interaction, {
       content: replyNotice || undefined,
       files: [attachment],
     });
   } catch (err) {
-    console.error("❌ เกิดข้อผิดพลาดในการสร้าง Rank Card:", err);
-    await interaction.editReply({
+    console.error("❌ เกิดข้อผิดพลาดในการสร้าง Rank Card:", errorSummary(err));
+    await respondToInteraction(interaction, {
       content: `📊 **ข้อมูลเลเวลของ ${targetUser.username}**\n- **อันดับในเซิร์ฟเวอร์:** #${rankNumber}\n- **เลเวล:** Level ${targetLevel}\n- **EXP สะสม:** ${targetChars.toLocaleString()} / ${nextLevelExp.toLocaleString()} EXP`,
     });
   }
@@ -74,7 +75,7 @@ export async function handleRankCommand(interaction) {
 export async function handleLeaderboardCommand(interaction) {
   const { guild, guildId, user } = interaction;
   if (!guildId) {
-    await interaction.reply({ content: "❌ คำสั่งนี้ใช้ได้เฉพาะในเซิร์ฟเวอร์เท่านั้น", ephemeral: true });
+    await respondToInteraction(interaction, { content: "❌ คำสั่งนี้ใช้ได้เฉพาะในเซิร์ฟเวอร์เท่านั้น", flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -87,9 +88,9 @@ export async function handleLeaderboardCommand(interaction) {
   users.sort((a, b) => b.level - a.level || b.chars - a.chars);
 
   if (users.length === 0) {
-    await interaction.reply({
+    await respondToInteraction(interaction, {
       content: "⚠️ ยังไม่มีข้อมูลการพิมพ์คุยหรือสะสมเลเวลของสมาชิกในเซิร์ฟเวอร์นี้ค่ะ",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -121,5 +122,5 @@ export async function handleLeaderboardCommand(interaction) {
     })
     .setTimestamp();
 
-  await interaction.reply({ embeds: [embed] });
+  await respondToInteraction(interaction, { embeds: [embed] });
 }

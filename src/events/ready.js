@@ -1,3 +1,4 @@
+import { errorSummary } from "../utils/helper.js";
 import { REST, Routes, SlashCommandBuilder, PermissionFlagsBits, ChannelType } from "discord.js";
 import { logServerCount, getGlobalLevelingConfig } from "../utils/db.js";
 
@@ -389,6 +390,27 @@ export function getSlashCommandDefinitions() {
                 .setName("status")
                 .setDescription("ดูข้อมูลการตั้งค่าระบบเทมเพลตแนะนำตัวในปัจจุบัน")
             )
+        )
+        .addSubcommandGroup((group) =>
+          group
+            .setName("reaction-role")
+            .setDescription("สร้างข้อความเลือกหลายยศผ่านอิโมจิ")
+            .addSubcommand((sub) => {
+              sub
+                .setName("setup")
+                .setDescription("สร้างข้อความกดรับยศและกดถอดยศ เลือกได้หลายยศ")
+                .addChannelOption((opt) => opt.setName("channel").setDescription("ห้องสำหรับข้อความเลือกยศ").addChannelTypes(ChannelType.GuildText).setRequired(true))
+                .addStringOption((opt) => opt.setName("title").setDescription("หัวข้อข้อความเลือกยศ").setMaxLength(256).setRequired(true))
+                .addStringOption((opt) => opt.setName("emoji1").setDescription("อิโมจิสำหรับยศที่ 1").setMaxLength(100).setRequired(true))
+                .addRoleOption((opt) => opt.setName("role1").setDescription("ยศที่ได้รับเมื่อกดอิโมจิที่ 1").setRequired(true))
+                .addStringOption((opt) => opt.setName("description").setDescription("คำอธิบายเพิ่มเติม").setMaxLength(2000));
+              for (let index = 2; index <= 10; index++) {
+                sub
+                  .addStringOption((opt) => opt.setName(`emoji${index}`).setDescription(`อิโมจิสำหรับยศที่ ${index}`).setMaxLength(100))
+                  .addRoleOption((opt) => opt.setName(`role${index}`).setDescription(`ยศที่ได้รับเมื่อกดอิโมจิที่ ${index}`));
+              }
+              return sub;
+            })
         ),
       new SlashCommandBuilder()
         .setName("giverole")
@@ -662,7 +684,7 @@ export async function registerGuildCommands(token, clientId, guildId, commands) 
 }
 
 export function setupReadyEvent(client, token, clientId) {
-  client.once("ready", async () => {
+  client.once("clientReady", async () => {
     console.log(`🤖 [Bot Status] เข้าสู่ระบบสำเร็จในชื่อ: ${client.user.tag}`);
     console.log(`🌐 [Servers] กำลังให้บริการอยู่ใน ${client.guilds.cache.size} เซิร์ฟเวอร์`);
 
@@ -680,17 +702,17 @@ export function setupReadyEvent(client, token, clientId) {
       console.log("⏳ [Slash Commands] กำลังล้าง Global Commands และลงทะเบียนคำสั่ง Local (Guild Commands)...");
       // ล้าง Global Commands เพื่อแก้คำสั่งซ้ำ 2
       await rest.put(Routes.applicationCommands(clientId), { body: [] }).catch((err) => {
-        console.warn("⚠️ ไม่สามารถล้าง Global Commands ได้:", err.message);
+        console.warn("⚠️ ไม่สามารถล้าง Global Commands ได้:", errorSummary(err));
       });
 
       // ลงทะเบียน Local Commands เฉพาะเซิร์ฟเวอร์
       for (const [guildId] of client.guilds.cache) {
         await registerGuildCommands(token, clientId, guildId, commands).catch((err) => {
-          console.warn(`⚠️ ไม่สามารถลงทะเบียนคำสั่งให้ Guild ${guildId} ได้:`, err.message);
+          console.warn(`⚠️ ไม่สามารถลงทะเบียนคำสั่งให้ Guild ${guildId} ได้:`, errorSummary(err));
         });
       }
       console.log("✅ [Slash Commands] ลงทะเบียนคำสั่ง Local (Guild Commands) สำเร็จเรียบร้อยแล้ว (ไม่ซ้ำแล้ว)!");
     } catch (error) {
-      console.error("❌ เกิดข้อผิดพลาดในการลงทะเบียน Slash Commands:", error);
+      console.error("❌ เกิดข้อผิดพลาดในการลงทะเบียน Slash Commands:", errorSummary(error));
     }
   });}

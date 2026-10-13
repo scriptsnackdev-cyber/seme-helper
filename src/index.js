@@ -1,4 +1,5 @@
-import { Client, GatewayIntentBits } from "discord.js";
+import { errorSummary } from "./utils/helper.js";
+import { Client, GatewayIntentBits, Partials } from "discord.js";
 import "dotenv/config";
 
 import { registerSystemFonts } from "./utils/canvas.js";
@@ -8,14 +9,15 @@ import { setupMessageCreateEvent } from "./events/messageCreate.js";
 import { setupInteractionCreateEvent } from "./events/interactionCreate.js";
 import { setupGuildCreateEvent } from "./events/guildCreate.js";
 import { setupGuildDeleteEvent } from "./events/guildDelete.js";
+import { setupMessageReactionEvents } from "./events/messageReaction.js";
 
 // ป้องกันบอทดับจาก Unhandled Promise Rejections และ Uncaught Exceptions
 process.on("unhandledRejection", (reason, promise) => {
-  console.error("❌ [Unhandled Rejection]:", reason);
+  console.error("Unhandled Rejection:", errorSummary(reason));
 });
 
 process.on("uncaughtException", (err) => {
-  console.error("❌ [Uncaught Exception]:", err);
+  console.error("Uncaught Exception:", errorSummary(err));
 });
 
 const token = process.env.DISCORD_TOKEN;
@@ -32,8 +34,10 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.MessageContent,
   ],
+  partials: [Partials.Message, Partials.Reaction, Partials.User],
 });
 
 // 1. ลงทะเบียนฟอนต์ระบบการ์ด
@@ -44,6 +48,7 @@ setupReadyEvent(client, token, clientId);
 setupGuildMemberAddEvent(client);
 setupMessageCreateEvent(client);
 setupInteractionCreateEvent(client);
+setupMessageReactionEvents(client);
 setupGuildCreateEvent(client, token, clientId);
 setupGuildDeleteEvent(client);
 

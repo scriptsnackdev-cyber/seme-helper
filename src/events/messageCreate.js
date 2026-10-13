@@ -9,7 +9,7 @@ import {
   getIntroSettings,
 } from "../utils/db.js";
 import { generateLevelUpCard } from "../utils/canvas.js";
-import { sendHelperMessage } from "../utils/helper.js";
+import { sendHelperMessage, errorSummary } from "../utils/helper.js";
 import { postIntroStickyMessage } from "../commands/set/setIntro.js";
 
 const userCooldowns = new Map();
@@ -41,7 +41,7 @@ async function handleIntroSticky(message, guildId) {
     await new Promise((resolve) => setTimeout(resolve, 350));
     await postIntroStickyMessage(message.guild, introSettings);
   } catch (err) {
-    console.error("❌ [Intro Sticky] ข้อผิดพลาดในการส่งเทมเพลต:", err);
+    console.error("❌ [Intro Sticky] ข้อผิดพลาดในการส่งเทมเพลต:", errorSummary(err));
   } finally {
     processingIntroChannels.delete(message.channel.id);
   }
@@ -129,7 +129,7 @@ export function setupMessageCreateEvent(client) {
           files: [attachment],
         }, guildId);
       } catch (cardErr) {
-        console.error("❌ ไม่สามารถสร้างการ์ด Level Up ได้:", cardErr);
+        console.error("❌ ไม่สามารถสร้างการ์ด Level Up ได้:", errorSummary(cardErr));
         await sendHelperMessage(targetChannel, {
           content: `🎉 ยินดีด้วยค่ะ <@${userId}>! เลเวลของคุณอัปเป็น **Level ${newLevel}** แล้วค่ะ! ✨`,
         }, guildId);

@@ -1,3 +1,4 @@
+import { errorSummary } from "../utils/helper.js";
 import { logServerCount } from "../utils/db.js";
 import { registerGuildCommands, getSlashCommandDefinitions } from "./ready.js";
 
@@ -14,7 +15,7 @@ export function setupGuildCreateEvent(client, token, clientId) {
       await registerGuildCommands(token, clientId, guild.id, commands);
       console.log(`✅ [Guild Join] ลงทะเบียน Slash Commands ให้กับ ${guild.name} สำเร็จ!`);
     } catch (err) {
-      console.error(`❌ [Guild Join Error] ไม่สามารถลงทะเบียนคำสั่งให้ ${guild.name}:`, err);
+      console.error(`❌ [Guild Join Error] ไม่สามารถลงทะเบียนคำสั่งให้ ${guild.name}:`, errorSummary(err));
     }
   });
 }

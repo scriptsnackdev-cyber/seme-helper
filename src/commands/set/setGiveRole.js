@@ -1,3 +1,5 @@
+import { MessageFlags } from "discord.js";
+import { respondToInteraction, deferCommand } from "../../utils/helper.js";
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
@@ -9,7 +11,7 @@ export async function handleSetGiveRoleCommands(interaction) {
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === "image" || subcommand === "banner") {
-    await interaction.deferReply({ ephemeral: true });
+    await deferCommand(interaction);
     const bannerAttachment = interaction.options.getAttachment("image");
 
     const bannerPngPath = path.join(DATABASE_DIR, guildId, "giverole", "banner.png");
@@ -40,7 +42,7 @@ export async function handleSetGiveRoleCommands(interaction) {
       }
     }
 
-    await interaction.editReply({
+    await respondToInteraction(interaction, {
       content: "✅ บันทึกรูปภาพหรือวิดีโอแบนเนอร์สำหรับคำสั่ง `/giverole` เรียบร้อยแล้วค่ะ!",
     });
   } else if (subcommand === "remove-image" || subcommand === "remove-banner") {
@@ -54,9 +56,9 @@ export async function handleSetGiveRoleCommands(interaction) {
     if (fs.existsSync(bannerWebpPath)) { fs.unlinkSync(bannerWebpPath); deleted = true; }
 
     if (deleted) {
-      await interaction.reply({ content: "✅ ลบแบนเนอร์ของคำสั่ง `/giverole` ออกเรียบร้อยแล้ว", ephemeral: true });
+      await respondToInteraction(interaction, { content: "✅ ลบแบนเนอร์ของคำสั่ง `/giverole` ออกเรียบร้อยแล้ว", flags: MessageFlags.Ephemeral });
     } else {
-      await interaction.reply({ content: "⚠️ เซิร์ฟเวอร์นี้ยังไม่ได้ตั้งค่าแบนเนอร์สำหรับ `/giverole`", ephemeral: true });
+      await respondToInteraction(interaction, { content: "⚠️ เซิร์ฟเวอร์นี้ยังไม่ได้ตั้งค่าแบนเนอร์สำหรับ `/giverole`", flags: MessageFlags.Ephemeral });
     }
   }
 }
