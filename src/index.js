@@ -1,3 +1,4 @@
+import fs from "fs";
 import { errorSummary } from "./utils/helper.js";
 import { Client, GatewayIntentBits, Partials } from "discord.js";
 import "dotenv/config";
@@ -33,6 +34,16 @@ if (!token) {
   process.exit(1);
 }
 
+// ค้นหา Path ของ FFmpeg (ให้ความสำคัญกับ /usr/bin/ffmpeg ของระบบ VPS ก่อน)
+const ffmpegPaths = [
+  "/usr/bin/ffmpeg",
+  "/usr/local/bin/ffmpeg",
+  ffmpegStatic || null,
+].filter(Boolean);
+
+const ffmpegPath = ffmpegPaths.find((p) => fs.existsSync(p)) || "ffmpeg";
+console.log(`🎬 [FFmpeg] Path: ${ffmpegPath}`);
+
 // สร้าง Discord Client
 const client = new Client({
   intents: [
@@ -48,7 +59,7 @@ const client = new Client({
 
 // ติดตั้งระบบเครื่องเล่นเพลง DisTube + yt-dlp
 client.distube = new DisTube(client, {
-  ffmpeg: { path: ffmpegStatic || "ffmpeg" },
+  ffmpeg: { path: ffmpegPath },
   emitNewSongOnly: true,
   plugins: [
     ytdlpPlugin,

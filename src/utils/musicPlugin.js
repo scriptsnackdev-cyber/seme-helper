@@ -194,6 +194,7 @@ export const ytdlpPlugin = {
       "bestaudio/best",
       song.url,
     ]);
+    console.log(`🎵 [StreamURL]: ${song.name} -> ${info?.url ? "Got Stream URL" : "Empty URL"}`);
     return info.url;
   },
   async getRelatedSongs(song) {

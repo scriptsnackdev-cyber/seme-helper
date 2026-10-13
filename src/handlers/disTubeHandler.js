@@ -32,6 +32,7 @@ export function setupDisTubeEvents(client) {
 
   client.distube
     .on("playSong", async (queue, song) => {
+      console.log(`🎵 [DisTube PlaySong]: ${song.name} (${song.duration}s)`);
       const { embeds, components } = generateMusicPanel(queue);
       const msg = await queue.textChannel?.send({ embeds, components }).catch(() => null);
       if (!msg) return;
@@ -94,6 +95,11 @@ export function setupDisTubeEvents(client) {
     })
     .on("finish", async (queue) => {
       if (queue._liveInterval) clearInterval(queue._liveInterval);
+    })
+    .on("ffmpegDebug", (debug) => {
+      if (debug.includes("error") || debug.includes("Error") || debug.includes("Output #0")) {
+        console.log("🎬 [FFmpeg]:", debug.trim());
+      }
     })
     .on("error", (error, queueOrChannel) => {
       console.warn("⚠️ [DisTube Error]:", error?.message || error);
